@@ -1,0 +1,162 @@
+\section{Introduction} \label{sec:intro}
+
+% This is the introduction where you should introduce your work. In
+% general the thing to aim for here is to describe a little bit of the
+% context for your work -- why did you do it (motivation), what was the
+% hoped-for outcome (aims) -- as well as trying to give a brief overview
+% of what you actually did.
+
+% It's often useful to bring forward some ``highlights'' into this
+% chapter (e.g.\ some particularly compelling results, or a particularly
+% interesting finding).
+
+% It's also traditional to give an outline of the rest of the document,
+% although without care this can appear formulaic and tedious. Your
+% call.
+
+This project report presents \emph{Hypermnesia}, an extension to the
+Mnesia \acrfull{dbms}~\cite{ericssonab2023mnesiaguide}. 
+Hypermnesia provides \acrfull{ec} 
+guarantee on top of Mnesia's transactional semantics. 
+In this chapter, I first discuss the motivation for building 
+Hypermnesia (\cref{sec:intro motivation}), then list the challenges and contributions
+in building Hypermnesia (\cref{sec:intro challenges,sec:intro contributions}). 
+After that, an outline of the report structure is given (\cref{sec:intro outline}).
+
+
+\subsection{Motivation} \label{sec:intro motivation}
+
+Mnesia is an embedded distributed \acrfull{dbms} designed for industrial-grade
+communication systems written in Erlang~\cite{ericssonab2023mnesiaguide}. It is
+influential in its usage across companies and organisations like Cisco,
+Goldman Sachs and Mastercard~\cite{cesarini2019erlang}.
+It is also used in open source highly scalable message brokers and XMPP services, such as 
+RabbitMQ~\cite{vmware2023rabbitmq}, MongooseIM~\cite{erlangsolutions2023MongooseIM} and 
+ejabberd~\cite{processone2023ejabberd}. Furthermore, Mnesia is part of the \acrfull{lyme}
+software bundle for building dynamic web pages that can handle heavy 
+traffic~\cite{wikipediacontributors2020LYME}.
+
+Despite its usage in heavy-load applications such as WhatsApp~\cite{vorontsov2018forgETS}
+that handle tens of thousands of messages per second~\cite{levy2022RabbitMQvsKafka}, the development of Mnesia has stayed
+relatively stagnant for many years\footnote{Much of the core code modified in this 
+project are over 13 years old, dating back to the time when Erlang was published on Github.}.
+Due to Mnesia's highly specialised nature and complex codebase, extending it often requires
+a combination of research knowledge and language expertise. This has
+deterred many developers from contributing to Mnesia,
+which means Mnesia lacks features that many modern distributed databases have. 
+Examples include the lack of non-transactional
+guarantees and automatic recovery after network partitions.
+
+Mnesia provides two ways to access the database: transactions
+and dirty operations. Transactions provide ACID guarantees~\cite{haerder1983dbtransaction}, 
+while dirty operations only give weak consistency~\cite{vogels2008ec}. Developers 
+have to choose either the
+strong transactional API while sacrificing performance and availability during
+network partitions, or use dirty operations for fast performance, but risk their
+data being inconsistent.  Moreover, Mnesia leaves the handling of potential
+data inconsistency after a partition entirely up to the 
+developer~\cite{ericssonab2023mnesiaguide}, which means a manual 
+restart of the cluster is often needed. Indeed, developers have reported that
+\say{\textit{the experience has convinced us that we need to prioritize up our 
+network partition recovery strategy}}~\cite{mineiro2008DukesofErl} 
+while handling a partitioned Mnesia cluster. 
+
+
+There are plenty of consistency models that are weaker than transactions but stronger
+than dirty operations' weak consistency~\cite{ericssonab2023mnesiaref}. 
+One such model is eventual consistency~\cite{vogels2008ec}, which
+guarantees convergence eventually when no updates are made to the data. This is an attractive
+model for Mnesia since it often has better performance than transactions, while
+also maintaining consistency eventually. Modelling data this way can serve
+as a viable approach for achieving data consistency after a network partition.
+
+To this end, I propose the following research questions (RQs):
+
+\begin{enumerate}[label={RQ\arabic*.},ref={RQ\arabic*}]
+  \item \emph{Can we introduce a non-transactional consistency guarantee, for example,
+  eventual consistency, into Mnesia?} Mnesia was developed and designed before many
+  of these consistency models became popular~\cite{mattsson1998mnesia}, and therefore 
+  retrofitting them into Mnesia can be a non-trivial task.  \label{itm:question ec possible}
+  \item \emph{How much overhead, in terms of time and space, will this new guarantee
+  bring, compared to Mnesia's existing operations?} Mnesia's tight integration with
+  Erlang gives it outstanding performance compared to other standalone databases.
+  Therefore, it is important to evaluate the overhead of the new operations to
+  ensure they are still competitive. \label{itm:question ec overhead}
+  \item \emph{Can eventual consistency help us achieve automatic conflict resolution
+  after a partition in Mnesia?} The fault tolerance model of 
+  Mnesia (\cref{sec:impl fault tolerance}) may present extra challenges in this 
+  otherwise straightforward extension. \label{itm:question ec conflict}
+  \item \emph{How much code refactoring is needed for the consistency guarantee to
+  function?} Mnesia is used in many large-scale (legacy) codebases, which might
+  be too expensive to do refactoring. Therefore it is important to understand 
+  the cost of adopting a new consistency model API in Mnesia.  
+  \label{itm:question ec refactor}
+\end{enumerate}
+
+
+\subsection{Challenges} \label{sec:intro challenges}
+
+There are several technical challenges (TCs) that need to be overcome to design,
+implement and evaluate Hypermnesia:
+
+\begin{enumerate}[label={TC\arabic*.}, ref={TC\arabic*}]
+  \item Mnesia is a rather old database system that has not received much attention for
+  years. This means the codebase contains legacy code and is not well documented.
+  \label{itm:intro mnesia old}
+  \item The previous point implies that there are potentially legacy projects
+  using Mnesia. The new feature, therefore, needs to be backwards compatible and 
+  ideally easy to be adopted by developers.
+  \item Another consequence of~\cref{itm:intro mnesia old} is that its test
+  suite does not include network partition tests, which are essential in testing
+  the correctness of eventual consistency. Moreover, its benchmark suite is only
+  written for transactions. Both of these need to be extended to evaluate Hypermnesia.
+  \item There are multiple ways to achieve eventual consistency. Therefore an
+  informed choice needs to be made based on Mnesia's existing architecture. A survey 
+  of existing methods and a study of the
+  relatively undocumented architecture of Mnesia is essential.
+\end{enumerate}
+
+
+\subsection{Contributions} \label{sec:intro contributions}
+
+\begin{itemize}
+  \item \textbf{A new eventual consistency model for the Mnesia \acrshort{dbms}.}
+  A new set of \acrshortpl{api} is designed for this new model to minimise the 
+  amount of code refactoring for existing codebases. Moreover, with this new API, 
+  automatic conflict resolution is
+  possible after a network partition, relieving developers from the burden
+  of manually restarting the database.
+  \item \textbf{An extension of the test suite for network partitions.}
+  These are used to test the correctness of Hypermnesia. It might
+  be useful for testing existing functionalities such as transactions as well.
+  \item \textbf{An extension of the existing benchmarking library for dirty operations
+  and \acrshort{ec} operations.} These are built on top of the original benchmarks 
+  for transactions.
+  \item \textbf{An evaluation of the new eventual consistency API}, in terms of the
+  following:
+  \begin{enumerate*}[(a)]
+    \item fault tolerance by testing its correctness under network partitions
+    and ability to reconcile after a partition;
+    \item performance by analysing time and space overhead and comparing against 
+    existing operations. Results show that Hypermnesia's \acrshort{ec} operations
+    can often achieve \(10\)x higher throughput and lower latency than 
+    Mnesia's transactions;
+    \item usability by analysing the amount of code refactoring needed to adopt
+    the new API in real codebases.
+  \end{enumerate*} 
+
+\end{itemize}
+
+
+\subsection{Outline} \label{sec:intro outline}
+
+The rest of the report is organised as follows: \Cref{sec:bg} introduces the
+reader to the background knowledge, including the architecture of Mnesia and
+different ways of achieving eventual consistency. \Cref{sec:related} describes
+recent research on eventually consistent databases and \acrshortpl{crdt}: a data
+structure for implementing eventually consistent systems. \Cref{sec:impl} goes 
+into detail about designing an API for Hypermnesia and implementing it with practical optimisations.
+\Cref{sec:eval} evaluates Hypermnesia in terms of its correctness,
+performance and usability. \Cref{sec:concl} concludes the
+report and outlines potential future work.
+

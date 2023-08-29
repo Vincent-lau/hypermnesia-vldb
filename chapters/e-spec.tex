@@ -1,0 +1,23 @@
+%TC:ignore
+\section{Single machine specification}
+
+The single phyiscal machine has a AMD Ryzen 9 3900X 12-Core Processor and 16GiB 
+DIMM DDR4 2667 MHz memory. It runs Ubuntu 22.04.2 LTS Operating System. 
+
+
+\section{Cluster configuration}
+
+The cluster consists of 10 nodes within our own small, research cluster. These
+ten nodes are placed inside three racks.
+Each node in the cluster has a 6-core Intel Xeon CPU E5-2430L @ 2.40GHz CPU 
+and 64GB of DDR3 
+memory. They all run Ubuntu 20.04 LTS operating system. There are 4 out of 9 
+worker nodes with hyper-threading enabled.
+
+The average network latency between
+each machine connected via Ethernet is about 
+\qty{0.19}{\milli\second}\footnote{measured with \texttt{ping(8)} \url{https://linux.die.net/man/8/ping}}
+and the average throughput is about \qty{918}{\mega\bit\per\second}\footnote{
+measured with \texttt{iperf(1)} \url{https://linux.die.net/man/1/iperf}}.
+
+%TC:endignore

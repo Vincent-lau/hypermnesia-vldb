@@ -1,0 +1,816 @@
+% This chapter may be called something else\ldots but in general the
+% idea is that you have one (or a few) ``meat'' chapters which describe
+% the work you did in technical detail.
+
+\section{System implementation} \label{sec:impl}
+
+
+\subsection{Implementation overview} \label{sec:impl overview}
+
+\Cref{fig:hypermnesia arch} shows an overview of Hypermnesia's architecture. 
+A client sends a request to one of the database nodes connected in the cluster, 
+and this request is then processed by the \verb|mnesia_ec| 
+module (\cref{subsec:bg mnesia arch,subsec:impl api}), responsible
+for calling the underlying pure op-based Set \acrshort{crdt} implementation.
+In Hypermnesia, two op-based Set \acrshortpl{crdt}
+are implemented: add-wins set (\verb|mnesia_pawset|) and remove-wins set (\verb|mnesia_prwset|)
+(\cref{sec:impl pawset}), which are called by \verb|mnesia_ec| based on the appropriate
+table type (\cref{lst:mnesia ec create table}). 
+\verb|mnesia_ec| also calls the \verb|mnesia_causal| module that handles the causal 
+broadcast (\cref{sec:impl cbcast}). Each of these modules is explained in more
+detail in the following sections.
+
+
+\begin{figure*}
+  \begin{tikzpicture}[
+    replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+    minimum height=15, minimum width=20, align=center,fill=ACMOrange},
+    client/.style={rectangle,rounded corners,inner sep=5pt, minimum size=15, align=center,
+    draw=black,fill=ACMBlue!50},
+    client2/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+    minimum height=15, minimum width=60, align=center,fill=ACMBlue},
+    replica2/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+    minimum height=15, minimum width=60, align=center, fill=ACMOrange},
+    net/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+    minimum height=15, minimum width=150, align=center,fill=ACMGreen},
+    node distance = 2cm,
+    skip loop/.style={to path={-- ++(0,-1) -| (\tikztotarget)}},
+    mod/.style={text width=1cm}
+    ]
+
+    \node[replica] (n1) {N1};
+    \node[replica, below left=of n1] (n2) {N2};
+    \node[replica, below right=of n1]  (n3) {N3};
+    \node[replica, below right=2cm and 0cm of n2]  (n4) {N4};
+    \node[replica, below left=2cm and 0cm of n3]  (n5) {N5};
+
+    \path[bidir] (n1) edge (n2);
+    \path[bidir] (n1) edge (n3);
+    \path[bidir] (n1) edge (n4);
+    \path[bidir] (n1) edge (n5);
+    \path[bidir] (n2) edge (n3);
+    \path[bidir] (n2) edge (n4);
+    \path[bidir] (n2) edge (n5);
+    \path[bidir] (n3) edge (n4);
+    \path[bidir] (n3) edge (n5);
+    \path[bidir] (n4) edge (n5);
+
+    \node[client,left =of n1] (c1) {Client 1}
+      edge[post,dashed] node[auto, swap, sloped] {request} (n1);
+    \node[above=of n1] (cluster) {Mnesia cluster};
+      
+    \node[right=3cm of cluster] (node a) {Node 1};
+    \node[client2, below=1cm of node a] (app a) {Client};
+    \node[replica2, below=of app a] (mnesia a) {Mnesia}
+      edge[pre] node[auto] {write} (app a)
+      edge[post, in=320,out=280,loop] (mnesia a);
+    \node[net, below right=2.5cm and 0.01cm of mnesia a, xshift=-15mm] (net) {Network}
+      ($(net.north west) + (0.45, 0) $) edge[pre] node[auto,near start,swap] (bcast1) 
+      {broadcast} (mnesia a);
+    \node[above=0.3cm of bcast1] {apply};
+
+    \node[right=2.5cm of node a] (node b) {Node 3};
+    \node[client2, right=of app a] (app b) {Client};
+    \node[replica2, right=of mnesia a] (mnesia b) {Mnesia}
+      edge[in=220,out=260,loop, post] node[auto, near end] {} (mnesia b)
+      edge[post, dashed] node[auto] (read) {read} ($(app b.south) - (0.06, 0) $)
+      ($(net.north east) - (0.7, 0) $) edge[post] node[auto,near start] (bcast2) 
+      {broadcast} (mnesia b);
+      \node[above=0.3cm of bcast2] {apply};
+
+    \path[dotted, thick] (n1.north east) edge (node a);
+    \path[dotted,thick] (n3.south) edge (net.south west);
+
+    \begin{scope}[node distance=1cm]
+      \node[right=of node b] (mod) {Modules};
+      \node[right=1.4cm of read,mod] (ec) {\texttt{mnesia\_ec} (\cref{subsec:bg mnesia arch,subsec:impl api})};
+      \node[right=0.3cm of mnesia b,mod,yshift=-0.4cm] (pawset) 
+        {\texttt{mnesia\_pawset} \texttt{mnesia\_prwset} (\cref{sec:impl pawset})};
+      \node[right=1.4 cm of bcast2,mod] (causal) {\texttt{mnesia\_causal} (\cref{sec:impl cbcast})};
+    \end{scope}
+
+  \end{tikzpicture}
+  \caption{Hypermnesia architecture overview.}
+  \label{fig:hypermnesia arch}
+\end{figure*}
+
+
+\subsection{Causal Broadcast} \label{sec:impl cbcast}
+
+Causal broadcast is a mature algorithm with standard implementation 
+strategies~\cite{schmuck1988broadcast,birman1991causal}. This section focuses on various
+modifications of the causal broadcast algorithm and pure op-based set 
+to the Erlang ecosystem.
+
+\subsection{Causal broadcast server}
+
+Causal broadcast is often treated as a middleware between the
+network and the application. It buffers messages until they are causally ready
+to be delivered to the application. The \mintinline{erlang}{gen_server} behaviour
+is a suitable abstraction, as it provides an interface from which
+developers can write custom implementations of request handlers to obtain a
+generic server (similar to interface in object-oriented 
+languages)~\cite{ericssonab2023otpdesign}.
+
+More concretely, we define a collection of public functions for the causal broadcast
+server, which can be called by \mintinline{erlang}{mnesia_ec} while sending
+and receiving messages. Two most basic ones are \mintinline{erlang}{send_msg/1}
+and \mintinline{erlang}{rcv_msg/1}, as shown in~\cref{lst:causal broadcast server}.
+The \mintinline{erlang}{send_msg/1} function returns the current timestamp
+as a vector clock to be attached to the message.  The \mintinline{erlang}{rcv_msg/1}
+function takes a received message and returns a list of messages ready to be
+delivered to Mnesia for further processing, such as database writing.
+The \verb|mnesia_causal| server also keeps track of a list of buffered messages.
+Each time a message is received, it is added to the buffer, and the buffer is
+searched for deliverable messages.
+
+
+\begin{listing}[htp]
+  \centering
+  \begin{minted}[frame=lines]{erlang}
+    -record(state,
+        {send_seq :: integer(),
+         delivered :: vclock(),
+         buffer :: [msg()] }).
+
+    -spec send_msg() -> vclock().
+    -spec rcv_msg(msg()) -> [msg()].
+  \end{minted} 
+  \caption{\texttt{mnesia\_causal} server for causal broadcast.}
+  \label{lst:causal broadcast server}
+\end{listing}
+
+
+\subsection{Tagged causal stable broadcast} \label{subsec:impl tcsb}
+
+The algorithm discussed above is a standard causal broadcast 
+algorithm~\cite{schmuck1988broadcast,kleppmann2022dist-notes,birman1991causal}.
+It does not expose any ordering or timestamp information when delivering a message.
+A Set \acrshort{crdt} often relies on unique identifiers to
+ensure commutativity of causally concurrent operations. \citet{baquero2017PureOp}
+observe that the timestamp information from the causal broadcast layer can act
+as a unique identifier for the \acrshort{crdt}, and thus
+propose exposing the ordering information from the causal broadcast layer to
+the application, i.e.\ the receive function would return a list of messages
+along with their timestamps (\cref{lst:tcsb}).
+
+\begin{listing}[htp]
+  \centering
+  \begin{minted}[frame=lines]{erlang}
+    -spec send_msg() -> timestamp().
+    -spec rcv_msg(msg()) -> [{msg(), timestamp()}].
+  \end{minted} 
+  \caption{\texttt{mnesia\_causal} server interface for \acrlong{tcsb}.}
+  \label{lst:tcsb}
+\end{listing}
+
+The extended \acrfull{tcsb} protocol works like this: when a message is ready 
+to be sent, the function \verb|send_msg/0| is called to obtain the timestamp which
+is attached to the message. 
+And when a message is received, the \verb|rcv_msg/1| is called to buffer the message
+and find all messages ready to be delivered. A message is ready when
+the following two conditions hold~\cite{schmuck1988broadcast,
+kleppmann2022dist-notes,birman1991causal}:
+
+\begin{enumerate}
+  \item The sender entry in the receiver's delivered map, which keeps track of how many
+  messages are delivered for each sender, is exactly one less than the entry
+  in the received message's timestamp;
+  \item The other entries in the received message's timestamp are all less than
+  or equal to the corresponding entries in the receiver's delivered map.
+\end{enumerate}
+
+The first condition ensures that all causally preceding messages from the sender
+have been delivered, and the second condition prevents us from delivering 
+messages that causally depend on messages from other nodes. Note that the sender 
+of the message can always deliver messages from itself immediately, a desirable 
+property for
+availability during partitions, and causal consistency is the strongest consistency
+model that provides such always-available property~\cite{mahajan2012cac}.
+
+\subsection{Pure operation-based Set CRDT} \label{sec:impl pawset}
+
+We have discussed the idea of a pure op-based set (\cref{subsec:bg op-based crdts}). 
+This section builds on top of the basic
+ideas of op-based Set \acrshort{crdt} and highlights 
+a few optimisations exploiting the causal broadcast 
+layer (\crefrange{subsec:impl causal redundancy}{subsec:impl pawset algorithm}).
+More subtle implementation challenges in interactions
+between Mnesia and the pure op-based set \acrshort{crdt} are also 
+discussed (\cref{subsec:impl practical}).
+
+\subsection{Causal Redundancy} \label{subsec:impl causal redundancy}
+
+\emph{Causal redundancy} is proposed by~\citet{baquero2017PureOp} for elements in
+the \acrshort{polog} that can be removed without affecting the output of
+queries. We define the
+redundancy relation in~\cref{lst:aw set causal redundancy}. The first rule
+says that a clear or remove operation is redundant in all cases. The second rule
+makes causally older additions of the same elements redundant. The third rule says every
+addition of an element present in the \acrshort{polog} is in the set. Redundant
+elements can be safely removed from the \acrshort{polog}, which helps reduce the
+storage cost.
+
+\begin{listing}[htp]
+  \centering
+  \begin{align*}
+    (t,o)\ R\ s &\iff o[0] = \mathrm{clear} \lor \mathrm{rmv}\\
+    (t,o)\ R\_\ (t',o') &\iff t<t' \land (o'[0]=\mathrm{clear}\lor o[1]=o'[1]) \\
+    \mathrm{eval}_i(\mathrm{elems},s) &= \{v\ \mid\ (\_,[\mathrm{add},v])\in s\}
+  \end{align*} 
+  \caption{The redundancy relation \(R\) for an \acrshort{awset}. \(o[0]\) is the
+  operation, while \(o[1]\) is the key. Taken from~\cite{baquero2017PureOp}.} 
+  \label{lst:aw set causal redundancy}
+\end{listing}
+
+
+\subsection{Causal stability}  \label{subsec:impl causal stability}
+
+The number of timestamps associated with each element grows as elements are added
+to the set. Moreover, each of them is proportional to the number of nodes in the 
+cluster. \citet{baquero2014PureOp} suggest removing the timestamps that are
+\emph{causally stable}~\cite{shapiro2011CRDT,baquero2017PureOp}:
+
+\begin{definition}[Causal Stability~\cite{baquero2017PureOp,baquero2014PureOp}]
+  A timestamp \(\tau\) and a corresponding message, is causally stable at node 
+  \(i\) when all messages subsequently delivered at \(i\) will have timestamp 
+  \(t>\tau\).
+  Or equivalently:
+
+  \[
+    \mathrm{tcstable}_i(\tau)\ \mathbf{if}\ \forall j\in I\setminus \{i\}. \exists
+    t\in \mathrm{deliv}_i()\cdot\mathrm{src}(t) = j \land \tau < t.
+  \]
+\end{definition}
+
+Once a timestamp is stable, it can be removed. This is safe since there will be no more
+concurrent operations delivered in the future and the timestamp metadata is
+used to ensure commutativity for concurrent operations and is therefore no longer
+needed, reducing the storage cost of the \acrshort{polog}.
+
+The actual implementation in Hypermnesia is done by asking the 
+pure \acrshort{awset} periodically scanning elements and removing causally stable timestamps.
+
+\subsection{Broadcast and CRDT algorithms} \label{subsec:impl pawset algorithm}
+
+\Cref{algo:tcsb} shows the broadcast algorithm obtained by putting these optimisations
+together (\crefrange{subsec:impl tcsb}{subsec:impl causal stability}). 
+When broadcasting a message (\crefrange{line:broadcast start}{line:broadcast end}),
+the appropriate timestamp and sender id are attached to the message, which is then
+received and buffered (\crefrange{line:receive start}{line:receive buffer end}). The
+receiver searches for messages that are causally ready to be delivered using
+the condition in~\cref{subsec:impl tcsb} (\crefrange{line:receive search start}{line:receive search end}).
+The causal broadcast server also provides a function to check for the stability of a 
+timestamp (\crefrange{line:stable start}{line:stable end}).
+This algorithm combines the standard causal broadcast
+algorithm~\cite{birman1991causal,kleppmann2022dist-notes} and extra exposed 
+APIs proposed by~\cite{baquero2014PureOp,baquero2017PureOp}, adapted to fit Mnesia's 
+architecture (\cref{subsec:bg mnesia arch}).
+
+\Cref{algo:pawset} shows the corresponding algorithm for the pure \acrshort{awset},
+written according to the specification~\cite{baquero2017PureOp,baquero2014PureOp}.
+The original specifications
+are written as a mathematical specification, while we take
+a programming perspective and present them in terms of set operations like
+\texttt{add}, \texttt{delete}, etc. The \verb|remove_redundant| function is called
+each time a deletion or insertion happens, and checks
+for redundant elements using the \verb|redundant| 
+function (\crefrange{line:awset red start}{line:awset red end}), based on the 
+idea of causal stability (\cref{lst:aw set causal redundancy}).
+
+\begin{algorithm}[htp]
+  \DontPrintSemicolon
+  \SetKwProg{Fn}{on}{:}{}  
+  \SetKwData{Delivered}{delivered} \SetKwData{Buffer}{buffer} \SetKwData{SendSeq}{sendSeq}
+  \SetKwData{Msg}{msg} \SetKwData{Sender}{sender} \SetKwData{Deps}{deps}
+  \SetKwData{Deliverable}{deliverable} \SetKwData{Ts}{ts}
+  \SetKwData{tsmap}{ts\_map}
+  \SetKwData{true}{true} \SetKwData{false}{false}
+
+  \SetKwFunction{Src}{src}
+
+  \Fn(){init} { \nllabel{line:init start}
+    \(\SendSeq \longleftarrow 0\) \;
+    \(\Buffer \longleftarrow \emptyset\) \;
+    \(\Delivered \longleftarrow \{(s, 0)\ \mid\  \forall s \in \mathrm{nodes}\}\) \;
+    \tcc{a map from node to last the timestamp of the last delivered message}
+    \(\tsmap \longleftarrow \{(s, \bot\ \mid\ \forall s\in \mathrm{nodes})\}\) \;
+  }  \nllabel{line:init end}
+
+  \Fn(){broadcast \Msg at replica \(i\)}{ \nllabel{line:broadcast start}
+    \(\Delivered[i] \leftarrow \SendSeq + 1\) \;
+    \SendSeq \(\leftarrow\) \SendSeq \(+ 1\) \;
+    \Deps \(\leftarrow\) \Delivered \;
+    broadcast (\Msg, \(i\), \Deps) to all nodes \;
+  } \nllabel{line:broadcast end}
+
+  \Fn(){receive (\Msg,\Sender,\Deps) at replica \(i\) } { \nllabel{line:receive start}
+    \Buffer \(\leftarrow\) \Buffer \(\cup\) \((\Msg,\Sender,\Deps)\) \; \nllabel{line:receive buffer end}
+    \Repeat{\(D = \emptyset\)}{ \nllabel{line:receive search start}
+      \tcc{find all causally deliverable messages}
+      \(D \leftarrow \{(\Msg,\Sender,\tau)\ |\ \exists (\Msg,\Sender,\tau)\in \Buffer.
+      \Deps[\Sender] = \tau[\Sender] + 1 \land \forall s \in  \mathrm{dom}(\Deps)
+      \setminus \{\Sender\}.\ \Deps[s] \geq \tau[s]\}\) \;
+      \tcc{update delivered vector and timestamp map}
+      \For{\((\Msg,\Sender,\tau) \in D\)}{
+        \(\Delivered[\Sender] \leftarrow \Delivered[\Sender] + 1\) \;
+        \(\tsmap[\Sender] \leftarrow \tau\) \;
+      }
+      \(\Buffer \leftarrow \Buffer \setminus D\) \;
+      \(\Deliverable \leftarrow \Deliverable \cup D \) \;
+    } \nllabel{line:receive search end}
+    deliver \Deliverable to application \;
+  } \nllabel{line:receive end}
+
+  \Fn(){check stability of \(\tau\)} { \nllabel{line:stable start}
+    \If{\(\tau \leq \min(\{\tsmap[s][\Src{\(\tau\)}]\ \mid\ s\in\mathrm{dom}(\tsmap)\})\)}{
+      \KwRet{\true} \;
+    } \Else{
+      \KwRet{\false} \;
+    }
+  } \nllabel{line:stable end}
+
+
+  \caption{\acrfull{tcsb} protocol algorithm, ideas taken
+  from~\cite{kleppmann2022dist-notes,baquero2017PureOp,bauwens2021Reactivity}.}
+  \label{algo:tcsb}
+\end{algorithm}
+
+
+\begin{algorithm}[htp]
+  \DontPrintSemicolon
+  \SetKwProg{Fn}{function}{:}{}  
+
+  \SetKwFunction{Add}{add} \SetKwFunction{Delete}{delete} \SetKwFunction{Read}{read}
+  \SetKwFunction{Stable}{stable}
+  \SetKwFunction{Red}{redundant} 
+  \SetKwFunction{RemoveRed}{remove\_redundant}
+  \SetKwFunction{App}{append} \SetKwFunction{Rmv}{remove}
+  \SetKwRepeat{Repeat}{periodically}{end}
+
+
+  \SetKwData{Msg}{msg} \SetKwData{Sender}{sender}
+  \SetKwData{polog}{POLog}
+  \SetKwData{true}{true} \SetKwData{false}{false}
+  \SetKwData{noop}{no-op} \SetKwData{add}{add} \SetKwData{delete}{delete}
+  \SetKwData{clear}{clear}
+
+  \(\polog \leftarrow []\) \;
+
+
+  \Fn(){\Add{\(e, t\)}} {
+    \RemoveRed{\(e, t, \add\)} \;
+    \For{\((e',t',o')\in \polog\)}{
+      \If{\Red{\((e,t,\add),(e',t',o')\)}}{
+        \KwRet{} \;
+      }
+    }
+    \(\polog \leftarrow \App{\polog, \((e,t,\add)\)} \) \;
+  }
+
+  \Fn(){\Delete(\(e, t\))} {
+    \RemoveRed{\(e, t, \delete\)}\;
+
+    \For{\((e',t',o')\in \polog\)}{
+      \If{\Red{\((e,t,\delete),(e',t',o')\)}}{
+        \KwRet{} \;
+      }
+    }
+    \(\polog \leftarrow \App{\polog, \((e,t,\delete)\)} \) \;
+
+  }
+   
+  \Fn(){\Read{\(k\)}} {
+    \For{\((e,t,o) \in \polog\)}{
+      \If{\(e.\mathrm{key} = k\)} {
+        \KwRet{\(e\)} \;
+      }
+    }
+    \KwRet{\(\mathrm{undefined}\)} \;
+  }
+
+  \Fn(){\RemoveRed(\(e,t,o\))} {
+    \For{\((e',t',o') \in \polog\)}{\nllabel{line:awset remove red}
+      \If{\Red{\((e',t',o'),(e,t,o)\)}}{
+        \(\polog \leftarrow \Rmv{\(\polog, (e',t',o')\)}\) \;
+      } 
+    }
+  }
+
+  \Fn(){\Red((e,t,o), (e',t',o'))} { \nllabel{line:awset red start}
+    \tcc{check whether \((e,t,o)\) is made redundant by \((e',t',o')\)}
+     \If{\(o=\delete\)}{
+        \KwRet{\true} \;
+     } \ElseIf{\(e = e' \land t < t'\)}{\nllabel{line:awset red}
+        \KwRet{\true} \;
+     } \Else{
+        \KwRet{\false} \;
+     }
+  } \nllabel{line:awset red end}
+
+  
+  \Repeat{}{
+    \For{\((e,t,o) \in \polog\)}{
+      \If{\Stable(\(t\))}{
+        \(\polog \leftarrow \Rmv{\(\polog, (e,t,o)\)}\) \;
+        \(\polog \leftarrow \App{\(\polog, (e',\bot,\noop)\)}\) \;
+      }
+    }
+  }
+
+  \caption{Pure \acrshort{awset} pseudocode, defined in terms of usual set operations.
+  This pseudocode sacrifices efficiency for clarity. Ideas are taken 
+  from~\cite{baquero2017PureOp,baquero2014PureOp,bauwens2021Reactivity}.}
+  \label{algo:pawset}
+\end{algorithm}
+
+Apart from the \acrlong{awset}, a \acrlong{rwset} (\cref{sec:impl overview}) 
+is also implemented, and the 
+algorithm is mostly similar to that of an \acrlong{awset}.
+This can be found in~\cref{appendix:rwset}. 
+
+\subsection{Practical concerns} \label{subsec:impl practical}
+
+This section discusses several practical issues in implementing the algorithm.
+
+\paragraph{Faster access to the \acrshort{polog}}
+
+As discussed in~\cref{subsec:bg mnesia arch}, Mnesia uses \texttt{ets} and \texttt{dets}
+as its storage system, which are implemented as hash tables and balanced binary trees.
+There is no direct support for log-like structures such as lists. This
+presents challenges as to how the \acrshort{polog} could be implemented. Typically
+a Mnesia table is a set indexed by the \(n\)-th element in a tuple, where \(n\) 
+is customisable. We keep this structure but use a bag instead of a set to allow
+multiple elements with the same key but different (concurrent) timestamps. 
+This representation gives us the advantage of accessing the element by key 
+in \(\mathcal O(1)\) time, which is useful in speeding
+up the \verb|remove_redundant| function that needs a liner scan of the entire set
+for matching keys (\cref{line:awset remove red} in~\cref{algo:pawset}).
+However, this representation also loses the partial order of the
+\acrshort{polog}, making the stabilisation process (\cref{subsec:impl causal stability}) 
+much more difficult. 
+
+
+\paragraph{Payload conflicts}
+
+\Cref{algo:pawset} deals with operations of a set in terms of addition, deletion,
+etc. Although the Mnesia documentation claims the data structure to be a set,
+it behaves more like a map, with keys and payload 
+(recall from~\cref{subsec:bg mnesia data repr} we saw that each row in the student 
+table has an id as the key, and other information like name as the payload). 
+Therefore the Set \acrshort{crdt}
+falls short when there are concurrent additions of the same key but different
+payloads. This can be solved in general with a Map \acrshort{crdt}~\cite{shapiro2011CRDT}, 
+which is a straightforward extension of a Set \acrshort{crdt}, but requires the
+payload to be \acrshortpl{crdt} as well so that the conflict can be resolved
+recursively for the payload.
+
+This puts constraints on the data a user can put in a Mnesia table, and
+is considered as breaking too much compatibility of the existing system and therefore
+I take a simpler approach by resolving them based on the Erlang term 
+order~\cite{ericssonab2023refmanual}, an ordering of data types in Erlang.
+This could easily be extended with other resolution strategies as well.
+
+
+\paragraph{More operations on Mnesia tables}
+
+Apart from the basic addition and deletion of elements, Mnesia 
+supports a range of other operations as well, including
+matching based on a pattern specification, iterating over a table, finding all
+the keys of a table, etc. As an example, the original \verb|select/2| function
+in Mnesia takes a table and a pattern specification as its argument. This is
+modified by appending wild cards for the timestamp and operation name (since they
+are stored along with each tuple in the \acrshort{polog}) to the input pattern 
+before matching. Other functions like \verb|all_keys/1| are implemented with
+similar ideas.
+
+
+\subsection{Fault tolerance} \label{sec:impl fault tolerance}
+
+This section continues the discussion from~\cref{subsec:bg cap} on Mnesia's response
+to network partitions and talks about how Hypermnesia addresses them. We continue
+to use the term transient failure and communication failure to distinguish them.
+
+\subsection{Communication failure} \label{subsec:impl communication failure}
+
+\Cref{tab:mnesia comm failure ops} shows the sequence of
+operations and the corresponding states of each replica, and
+\cref{fig:mnesia comm failure} shows the graphical representation where three
+Mnesia nodes are initially connected to each other and each has an element
+\texttt{a} in them. Then a partition occurs between node A and node B, as well as
+node A and node C. During this partition, an addition of 
+element \texttt{c} occurs at A while addition of element \texttt{b} happens
+at B and C. When the partition recovers, replicas are now in an inconsistent
+state which will be reported to the developer for manual resolution.
+
+
+\begin{table}[htp]
+  \begin{tabular}{cccc}
+    \toprule
+    Operation & Node A & Node B & Node C \\
+    \midrule
+    A::add(a) & \{a\} & \{a\} & \{a\} \\
+    \cmidrule{2-4}
+    B::add(b) & \{a\} & \{a,b\} & \{a,b\} \\
+    A::add(c) & \{a,c\} & \{a,b\} & \{a,b\} \\
+    \cmidrule{2-4}
+    \texttt{inconsistent\_database} & \{a,c\} & \{a,b\} & \{a,b\} \\
+    \bottomrule
+  \end{tabular} 
+  \caption{Operations performed on each replica. Operations that happen during
+  the network partition sit between two horizontal lines.}
+  \label{tab:mnesia comm failure ops}
+\end{table}
+
+\begin{figure}[htp]
+  \begin{subfigure}[t]{0.3\textwidth}
+    \centering
+    \begin{tikzpicture}[
+      replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+      minimum height=15, minimum width=20, align=center,fill=ACMOrange},
+    ]
+      \node[replica] (s1-m1) {A};
+      \node[replica,below left=1cm and 0.5cm of s1-m1] (s1-m2) {B}
+        edge[bidir] (s1-m1);
+      \node[replica,below right=1cm and 0.5cm of s1-m1] (s1-m3) {C}
+        edge[bidir] (s1-m1)
+        edge[bidir] (s1-m2);
+  
+      \node[above=1mm of s1-m1] (s1-t1) {\{x\}};
+      \node[below=1mm of s1-m2] (s1-t2) {\{x\}};
+      \node[below=1mm of s1-m3] (s1-t3) {\{x\}};
+    \end{tikzpicture} 
+    \caption{Initially every replica has an \texttt{a} in its set.}
+  \end{subfigure}
+  
+  \begin{subfigure}[t]{0.3\textwidth}
+    \centering
+    \begin{tikzpicture}[
+      replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+      minimum height=15, minimum width=20, align=center,fill=ACMOrange},
+    ]
+      \node[replica,right=4cm of s1-m1] (s2-m1) {A};
+      \node[replica,below left=1cm and 0.5cm of s2-m1] (s2-m2) {B}
+        edge[bidir,dashed] (s2-m1);
+      \node[replica,below right=1cm and 0.5cm of s2-m1] (s2-m3) {C}
+        edge[bidir, dashed] (s2-m1)
+        edge[bidir] (s2-m2);
+
+      \node[above=1mm of s2-m1] (s2-t1) {\{x,\textcolor{ACMGreen}{z}\}};
+      \node[below=1mm of s2-m2] (s2-t2) {\{x,\textcolor{ACMGreen}{y}\}};
+      \node[below=1mm of s2-m3] (s2-t3) {\{x,\textcolor{ACMGreen}{y}\}};
+    \end{tikzpicture}
+    \caption{A partition (dashed lines) making A temporarily unreachable. Meanwhile,
+    \texttt{y} and element \texttt{z} are added to the set.}
+  \end{subfigure}
+  
+  \begin{subfigure}[t]{0.3\textwidth}
+    \centering
+    \begin{tikzpicture}[
+      replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+      minimum height=15, minimum width=20, align=center,fill=ACMOrange},
+    ]
+      \node[replica] (s3-m1) {A};
+      \node[replica,below left=1cm and 0.5cm of s3-m1] (s3-m2) {B}
+        edge[bidir] (s3-m1);
+      \node[replica,below right=1cm and 0.5cm of s3-m1] (s3-m3) {C}
+        edge[bidir] (s3-m1)
+        edge[bidir] (s3-m2);
+  
+      \node[above=1mm of s3-m1] (s3-t1) {\{x,z\}};
+      \node[below=1mm of s3-m2] (s3-t2) {\{x,y\}};
+      \node[below=1mm of s3-m3] (s3-t3) {\{x,y\}};
+
+      \node[left=1mm of s3-m1] (s3-w1) {\color{Red}{Error!}};
+
+    \end{tikzpicture} 
+    \caption{When the partition heals, Mnesia would log an error message indicating
+    \texttt{inconsistent\_database} to the user for manual resolution.}
+  \end{subfigure}
+  \caption{Illustration of a communication failure in Mnesia.}
+  \label{fig:mnesia comm failure}
+\end{figure}
+
+\begin{figure}[htp]
+  \begin{subfigure}[t]{0.3\textwidth}
+    \centering
+    \begin{tikzpicture}[
+      replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+      minimum height=15, minimum width=20, align=center,fill=ACMOrange},
+    ]
+      \node[replica] (s1-m1) {A};
+      \node[replica,below left=1cm and 0.5cm of s1-m1] (s1-m2) {B}
+        edge[bidir] (s1-m1);
+      \node[replica,below right=1cm and 0.5cm of s1-m1] (s1-m3) {C}
+        edge[bidir] (s1-m1)
+        edge[bidir] (s1-m2);
+  
+      \node[above=1mm of s1-m1] (s1-t1) {\{x\}};
+      \node[below=1mm of s1-m2] (s1-t2) {\{x\}};
+      \node[below=1mm of s1-m3] (s1-t3) {\{x\}};
+    \end{tikzpicture} 
+    \caption{Initially every replica has an \texttt{a} in its set.}
+  \end{subfigure}
+
+  \begin{subfigure}[t]{0.3\textwidth}
+    \centering
+    \begin{tikzpicture}[
+      replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+      minimum height=15, minimum width=20, align=center,fill=ACMOrange},
+    ]
+      \node[replica,right=4cm of s1-m1] (s2-m1) {A};
+      \node[replica,below left=1cm and 0.5cm of s2-m1] (s2-m2) {B}
+        edge[bidir,dashed] (s2-m1);
+      \node[replica,below right=1cm and 0.5cm of s2-m1] (s2-m3) {C}
+        edge[bidir, dashed] (s2-m1)
+        edge[bidir] (s2-m2);
+
+      \node[above=1mm of s2-m1] (s2-t1) {\{x,\textcolor{ACMGreen}{z}\}};
+      \node[below=1mm of s2-m2] (s2-t2) {\{x,\textcolor{ACMGreen}{y}\}};
+      \node[below=1mm of s2-m3] (s2-t3) {\{x,\textcolor{ACMGreen}{y}\}};
+
+      \node[left=1mm of s2-m1] (s2-o1) {add(z)\texttt{->}B};
+      \node[right=1mm of s2-m1] (s2-o1) {add(z)\texttt{->}C};
+      \node[left=1mm of s2-m2] (s2-o1) {add(y)\texttt{->}A};
+
+    \end{tikzpicture}
+    \caption{Hypermnesia buffers messages during the partition.}
+    \label{subfig:hypermnesia comm failure b}
+  \end{subfigure}
+
+  \begin{subfigure}[t]{0.3\textwidth}
+    \centering
+    \begin{tikzpicture}[
+      replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+      minimum height=15, minimum width=20, align=center,fill=ACMOrange},
+    ]
+      \node[replica] (s3-m1) {A};
+      \node[replica,below left=1cm and 0.5cm of s3-m1] (s3-m2) {B}
+        edge[bidir] (s3-m1);
+      \node[replica,below right=1cm and 0.5cm of s3-m1] (s3-m3) {C}
+        edge[bidir] (s3-m1)
+        edge[bidir] (s3-m2);
+  
+      \node[above=1mm of s3-m1] (s3-t1) {\{x,y,z\}};
+      \node[below=1mm of s3-m2] (s3-t2) {\{x,y,z\}};
+      \node[below=1mm of s3-m3] (s3-t3) {\{x,y,z\}};
+
+    \end{tikzpicture} 
+    \caption{When the communication failure recovers, buffered messages are delivered
+    and conflicts are resolved.}
+    \label{fig:hypermnesia comm failure}
+  \end{subfigure}
+  \caption{Hypermnesia buffers messages during communication failure and resolves
+  conflicts afterwards.}
+\end{figure}
+
+
+Hypermnesia resolves this issue by buffering messages during the partition, as
+shown in~\cref{fig:hypermnesia comm failure}. During the communication failure, 
+operations performed on replicas A and B are buffered until the partition heals. 
+By the property of op-based \acrshortpl{crdt} (\cref{prop:op crdt convergence}),
+replicas will converge after the buffered messages are delivered.
+In this simple case, it is sufficient to achieve consistency by a simple set 
+union. In a more complex case
+such as concurrent addition and deletion, the underlying op-based 
+\acrshort{crdt} (\cref{sec:impl pawset}) will handle the conflict resolution 
+logic to ensure convergence.
+
+The challenge here is that Mnesia, by default, considers dead nodes not to be 
+part of the
+cluster and carries on operations as if they did not exist. This might be a
+desirable behaviour in transactions, and developers can use the \texttt{majority}
+option to protect mission-critical data. But in an eventually consistent system,
+this is less ideal since we want our system to repair itself automatically.
+Therefore Hypermnesia considers dead nodes as part of the cluster and buffers
+operations for them.
+
+\subsection{Transient failure} \label{subsec:impl transient failure}
+
+When a transient network failure happens, communication between nodes temporarily
+stops but is not long enough for the failure detector to act. Transactions
+will completely stall during this period. Although dirty operations can carry
+on, replicas might end up in different states due to out-of-order message delivery.
+For example, in~\cref{fig:mnesia transient failure}, there might be a
+network failure between node B to A, resulting in B's \texttt{add a} being delayed.
+If messages are delivered as they arrive, then node A and node C will end up in 
+an inconsistent state. This is because addition and deletion in a set 
+do not commute, and the two purple operations (add and delete) are concurrent, and
+they are applied in a different order on node A and node C, resulting in different final
+states.
+
+\begin{figure}[htp]
+  \centering
+  \begin{subfigure}[t]{0.95\columnwidth}
+    \centering
+    \begin{tikzpicture}[
+      timeline/.style={semithick, dotted},
+      commentl/.style={align=right},
+      commentr/.style={commentl, align=left},]
+      \node[] (n1) { Node A};
+      \node[right=2cm of n1] (n2) { Node B};
+      \node[right=2cm of n2] (n3) { Node C};
+      
+      \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-4cm]n2add-|n1) 
+        coordinate (n1addn2) node[pos=.6, above, sloped] {add a};
+      \draw[post] (n2add) -- ([yshift=-1cm]n2add-|n3) 
+        coordinate (n3addn2) node[pos=.3, above, sloped] {\textcolor{ACMPurple}{add a}};
+      \draw[post] ([yshift=-1cm]n1.south) coordinate (n1add) -- ([yshift=-2cm]n1add-|n3)
+        coordinate (n3addn1) node[pos=.6, above, sloped] {add a};
+      \draw[post] ([yshift=-1.3cm]n1add) coordinate (n1rmv) -- ([yshift=-2cm]n1rmv-|n3)
+        coordinate (n3rmvn1) node[pos=.6, above, sloped] {\textcolor{ACMPurple}{delete a}};
+      
+      \draw[timeline] (n1) -- ($ (n1addn2) + (0, -1cm) $);
+      \draw[timeline] (n2) -- ($ (n2|-n1addn2) + (0, -1cm) $);
+      \draw[timeline] (n3) -- ($ (n3|-n1addn2) + (0,-1cm) $);
+      
+      \node[left=2mm of n1add, commentl] {add a};
+      \node[below left=0.4cm and 2mm of n1add, commentl] {\{a\}};
+      \node[left=2mm of n1rmv, commentl] {delete a};
+      \node[below left=0.5cm and 2mm of n1rmv, commentl] {\{\}};
+      \node[left=2mm of n1addn2, commentl] {\{a\}};
+      \node[left=2mm of n2add, commentl] {add a};
+
+      \node[right=2mm of n3addn2, commentr]  {\{a\}};
+      \node[right=2mm of n3addn1, commentr]  {\{a\}};
+      \node[right=2mm of n3rmvn1, commentr]  {\{\}};
+      \end{tikzpicture}
+
+    \caption{Mnesia replica states can diverge depending on the ordering of delivery of operations.
+    The purple operations are causally concurrent.}
+    \label{fig:mnesia transient failure}
+  \end{subfigure}
+  
+  \begin{subfigure}[t]{0.95\columnwidth}
+    \centering
+    \begin{tikzpicture}[
+      timeline/.style={semithick,dotted},
+      commentl/.style={align=right},
+      commentr/.style={commentl, align=left},]
+      \node[] (n1) { Node A};
+      \node[right=2cm of n1] (n2) { Node B};
+      \node[right=2cm of n2] (n3) { Node C};
+      
+      \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-4cm]n2add-|n1) 
+        coordinate (n1addn2) node[pos=.6, sloped, auto, swap] {(add a, \([0,1,0]\))};
+      \draw[post] (n2add) -- ([yshift=-1cm]n2add-|n3) 
+        coordinate (n3addn2) node[pos=.6, above, sloped] 
+        {\textcolor{ACMPurple}{(add a, \([0,1,0]\))}};
+      \draw[post] ([yshift=-1cm]n1.south) coordinate (n1add) -- ([yshift=-2cm]n1add-|n3)
+        coordinate (n3addn1) node[pos=.6, above, sloped,near end] {(add a, \([1,0,0]\))};
+      \draw[post] ([yshift=-1.3cm]n1add) coordinate (n1rmv) -- ([yshift=-2cm]n1rmv-|n3)
+        coordinate (n3rmvn1) node[pos=.7, above, sloped] 
+        {\textcolor{ACMPurple}{(delete a, \([2,0,0]\))}};
+      
+      \draw[timeline] (n1) -- ($ (n1addn2) + (0, -1cm) $);
+      \draw[timeline] (n2) -- ($ (n2|-n1addn2) + (0, -1cm) $);
+      \draw[timeline] (n3) -- ($ (n3|-n1addn2) + (0,-1cm) $);
+      
+      \node[left=2mm of n1add, commentl] {add(a)};
+      \node[below left=0.4cm and 2mm of n1add, commentl] {\{(a,\([1,0,0]\))\}};
+      \node[left=2mm of n1rmv, commentl] {delete(a)};
+      \node[below left=0.5cm and 2mm of n1rmv, commentl] {\{\}};
+      \node[left=2mm of n1addn2, commentl] {\{(a,\([0,1,0]\))\}};
+      \node[left=2mm of n2add, commentl] {add(a)};
+
+      \node[right=2mm of n3addn2, commentr]  {\{(a,\([0,1,0]\))\}};
+      \node[right=2mm of n3addn1, commentr]  {\{(a,\([0,1,0]\)), (a,\([1,0,0]\))\}};
+      \node[right=2mm of n3rmvn1, commentr]  {\{(a,\([0,1,0]\))\}};
+      \end{tikzpicture}
+    \caption{Hypermnesia attaches vector timestamps to each message and stores them 
+    along with actual elements in the set for conflict resolution.}
+    \label{fig:hypermnesia transient failure}
+  \end{subfigure}
+  \caption{Mnesia and Hypermnesia's response to transient network failure.}
+  \label{fig:transient failure}
+\end{figure}
+
+
+In order to achieve convergence, and hence eventual consistency, concurrent
+operations need to commute.
+The exact semantics of whether addition or deletion wins depends on the actual
+application, and to achieve convergence, it is sufficient to
+define consistent semantics across replicas. Add-wins semantics is presented here
+but the remove-wins semantics is similar (\cref{appendix:rwset}). To achieve
+add-wins semantics with a pure op-based Set \acrshort{crdt}, we require deletions
+to only remove elements that causally precede it, as captured by~\cref{line:awset remove red}
+in~\cref{algo:pawset}. In~\cref{fig:hypermnesia transient failure},
+the deletion with timestamp \([2,0,0]\) removes the element (a,\([1,0,0]\))
+which is causally lower, but not (a,\([0,1,0]\)) which is causally concurrent.
+
+
+\subsection{Summary}
+
+This chapter covers the design of Hypermnesia (\cref{sec:impl design}) 
+in terms of its \acrshortpl{api} to minimise the amount of code refactoring 
+needed (\cref{subsec:impl api}). We also examined the suitability 
+of different \acrshortpl{crdt} and decided to use pure op-based \acrshortpl{crdt}
+primarily because of its similarity to Mnesia's communication 
+pattern (\cref{subsec:impl choose crdt}). A prototype implementation 
+is presented (\cref{sec:impl overview}), including
+a \acrlong{tcsb} layer by extending the basic causal broadcast with timestamp and
+causal stability information (\cref{subsec:impl tcsb}). Practical optimisations
+such as the use of \texttt{bag} data structures are also considered (\cref{sec:impl pawset}). 
+We also briefly talked about two patterns of network faults and how the \acrshort{awset}
+and buffering of operations can help us (\cref{sec:impl fault tolerance}).
+

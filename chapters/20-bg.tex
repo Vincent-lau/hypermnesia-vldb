@@ -1,0 +1,538 @@
+\section{Background} \label{sec:bg}
+
+This chapter introduces consistency models in a distributed system relevant 
+to this work (\cref{sec:bg consistency models}). It then discusses the architecture 
+of Mnesia (\cref{sec:bg mnesia}) before giving an overview of \acrshortpl{crdt}.
+
+\subsection{Consistency models} \label{sec:bg consistency models}
+
+A distributed system often involves a set of replicated state 
+machines~\cite{lamport1978clock}. Coordinating these clusters of machines is a 
+challenging task, and tradeoffs can be
+made between consistency and performance. Many consistency models are formalised for 
+both transactional and non-transactional systems~\cite{viotti2016consistency}. 
+This section gives a brief
+introduction to three of them in detail: distributed transactions (provided by
+Mnesia's transaction API), weak consistency (provided by Mnesia's dirty operations)
+and eventual consistency (the aim of this project).
+
+\paragraph{Distributed transactions} is sometimes also called distributed atomic 
+commits. It is achieved if all nodes commit
+or all nodes abort~\cite{saltzer2009Principles}. This is part of the properties provided by 
+ACID~\cite{haerder1983dbtransaction} and
+is often implemented with the distributed two-phase commit protocol~\cite{bernstein1987concurrency}.
+Mnesia provides such a guarantee via its transaction APIs.
+
+\paragraph{Weak consistency}
+is defined as follows:  
+``The system does not guarantee that subsequent accesses will return the updated 
+value, and several conditions need to be met before the value will be 
+returned''~\cite{vogels2008ec,bermbach2013consistency,viotti2016consistency}.
+It is (deliberately) vaguely defined to incorporate systems whose replicas
+``might become consistent by chance''~\cite{bermbach2013consistency}. 
+Mnesia's dirty operations fall into this category. 
+
+\paragraph{Eventual consistency} 
+is defined as follows: ``If no new updates are made to the object,
+eventually all accesses will return the last updated value''~\cite{vogels2008ec}. 
+There are often two steps in achieving eventual consistency~\cite{wikipediacontributors2023ec}:
+\begin{enumerate*}[(i)]
+  \item anti-entropy~\cite{demers1987epidemic} disseminates data to all the nodes 
+  in a cluster;
+  \item conflict resolution addresses potential conflicts when handling received data.
+\end{enumerate*}
+
+Anti-entropy typically involves some form of broadcasting messages, while conflict
+resolution tends to use (one of) the following three techniques:~\cite{kleppmann2017DDIA}:
+\emph{\acrfullpl{crdt}}~\cite{shapiro2011CRDT,preguica2018CRDT}
+\emph{Mergable persistent data structures}~\cite{farinier2015mergable} and
+\emph{Operational transformation}~\cite{ellis1989ot}. 
+
+Among these three ideas, \acrshortpl{crdt} is one of the 
+database community's most used and well studied approaches. It has been
+successfully deployed in many NoSQL databases, such as 
+Riak~\cite{klophaus2010Riak}, Redis~\cite{redis2022rediscrdt} and Microsoft Azure 
+Cosmos DB~\cite{shukla2018CosmosDB}. Operational transformation requires a central 
+coordinator, which
+is unsuitable for Mnesia as it uses a leaderless replication strategy (\cref{subsec:bg mnesia arch}). 
+Mergable persistent data structures are based on version
+control ideas, but multi-version support is not available in Mnesia,
+meaning this method is not easily implementable in Mnesia. In conclusion,
+\acrshortpl{crdt} is chosen as the basis of conflict resolution and discussed in
+more detail in~\cref{sec:bg crdt}.
+
+
+\subsection{Mnesia} \label{sec:bg mnesia}
+
+Mnesia is an embedded~\cite{raasveldt2019DuckDB},
+specialised distributed \acrshort{dbms} for Erlang/OTP 
+applications (\cref{subsec:bg mnesia design goal,subsec:bg mnesia arch}).
+It is similar to relational databases where each table stores 
+tuples (\cref{subsec:bg mnesia data repr}), but also
+different since it uses Erlang as its query language instead of SQL\@.
+It has dual mode support for accessing data (\cref{subsec:mnesia access contexts}),
+discussed in more detail below.
+
+\subsection{Design goals} \label{subsec:bg mnesia design goal}
+
+The original design of Mnesia attempts to meet several requirements~\cite{ericssonab2023mnesiaguide}:
+
+\begin{enumerate}
+  \item Fast real-time key-value lookup
+  \item Complex non-real-time queries (mainly for operation and maintenance tasks)
+  \item Distributed data (due to the distributed nature of the applications)
+  \item High fault tolerance
+  \item Dynamic reconfiguration
+\end{enumerate}
+
+Based on these, Mnesia was built as part of the Erlang/OTP distribution.
+Erlang was originally designed for building fault-tolerant telecommunication systems,
+and Mnesia helps it to better achieve that goal by acting as an embedded database: 
+it is tightly coupled to Erlang, giving it two distinct features:
+\begin{enumerate*}[(a)]
+  \item The database runs in the same address space as the application itself,
+  offering minimum overhead while accessing data.
+  \item The database uses native Erlang records to store its data,
+  removing the impedance mismatch between different data formats.
+\end{enumerate*}
+
+These special features make Mnesia only suitable for specific purposes.
+Mnesia is typically used when there is a need to replicate a 
+relatively small amount of data: compared with standard SQL databases that can
+handle terabytes of data, Mnesia is instead built for (tens of) gigabytes of 
+data~\cite{hebert2013LYSE}.
+For example, user login details are often stored as session data, and to 
+scale the application out, these data need to be replicated across
+nodes and accessed quickly to provide a good user experience. 
+Mnesia can be a suitable candidate in such a case due to its compelling performance.
+
+\subsection{Architecture} \label{subsec:bg mnesia arch}
+
+Mnesia is built on top of Erlang's built-in memory and disk term storage
+\texttt{ets} and \texttt{dets}~\cite{ericssonab2023stdlib}.  These term storage
+can be thought of as primitive storage engines that provide constant (or
+logarithmic) access time for large amounts of data~\cite{hebert2013LYSE}.
+They support different data structures for storing data, such as set, 
+bag, etc.  Internally, these are implemented as hash tables or balanced binary trees.
+Mnesia also provides additional functionalities such as transactions and 
+distribution on top of \texttt{ets} and \texttt{dets}.
+
+A Mnesia cluster generally has a leaderless architecture where every replica can 
+handle client requests. A cluster of Mnesia nodes are connected via the
+Erlang distribution protocol, which uses TCP/IP as its carrier by default, providing
+reliable in-order delivery. Moreover, the connection is transitive, 
+like~\cref{fig:example mnesia cluster} which forms a cluster of fully connected
+nodes (or a mesh).
+
+
+
+\begin{figure}[htp]{0.95\textwidth}
+  \begin{tikzpicture}[
+    replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
+    minimum height=10, minimum width=12, align=center,fill=ACMOrange!50,
+    font={\footnotesize} },
+    client/.style={rectangle,rounded corners,inner sep=5pt, minimum size=15, align=center,
+    draw=black,fill=ACMBlue!50},
+    node distance=2cm
+    ]
+
+    \node[replica] (n1) {N1};
+    \node[replica, below left=of n1] (n2) {N2};
+    \node[replica, below right=of n1]  (n3) {N3};
+    \node[replica, below right=2cm and 0cm of n2]  (n4) {N4};
+    \node[replica, below left=2cm and 0cm of n3]  (n5) {N5};
+
+    \path[bidir] (n1) edge (n2);
+    \path[bidir] (n1) edge (n3);
+    \path[bidir] (n1) edge (n4);
+    \path[bidir] (n1) edge (n5);
+    \path[bidir] (n2) edge (n3);
+    \path[bidir] (n2) edge (n4);
+    \path[bidir] (n2) edge (n5);
+    \path[bidir] (n3) edge (n4);
+    \path[bidir] (n3) edge (n5);
+    \path[bidir] (n4) edge (n5);
+
+  \end{tikzpicture}
+  \caption{Example Mnesia cluster of five nodes. Note they always form a
+  fully connected network.}
+  \label{fig:example mnesia cluster}
+\end{figure}
+
+
+\begin{figure*}[htp]
+    \centering
+    \begin{tikzpicture}[
+      basemod/.style={rectangle,rounded corners, draw=black, fill=white,inner sep=5pt,
+      minimum width=60, minimum height=20, align=center},
+      mod/.style={basemod, fill=white},
+      newmod/.style={basemod, fill=ACMGreen},
+      % every node/.append style = {draw, anchor = west},
+      % level 1/.style={sibling distance=3cm},
+      level 2/.style={sibling distance=1cm},
+      grow via three points={one child at (0.5,-1) and two children 
+      at (0.5,-1.5) and (0.5,-2.5)},
+      edge from parent path={(\tikzparentnode\tikzparentanchor) |- (\tikzchildnode\tikzchildanchor)},
+      edge from parent/.style={draw,semithick},
+      newmodedge/.style={ACMGreen}
+      ]
+
+      \node[mod, parent anchor=south] {mnesia sup} 
+        [anchor=west]
+        child {node[mod] {event}}
+        child {node[mod] {kernel sup} 
+            [grow=right] 
+            child[parent anchor=east, child anchor=east] {node {}
+              [grow=right,child anchor=west]
+              child[parent anchor=west] {node[newmod] {causal} edge from parent[newmodedge]} 
+              child[parent anchor=west] {node[newmod] {ec} 
+                child[parent anchor=east, child anchor=east] { node{}
+                  [grow=right,child anchor=west,level distance=1cm]
+                  child[parent anchor=west] {node[newmod] {pawset} edge from parent[newmodedge,dashed]}
+                  child[parent anchor=west] {node[newmod] {prwset} edge from parent[newmodedge,dashed]}
+                }
+                edge from parent[newmodedge]
+              } 
+              child[parent anchor=west] {node[mod,double copy shadow={opacity=.5}] {others\dots}}
+              child[parent anchor=west] {node[mod] {monitor}}  
+              child[parent anchor=west] {node[mod] {subscriber}}
+              child[parent anchor=west] {node[mod] {locker}}
+              child[parent anchor=west] {node[mod, fill=ACMLightBlue] {tm}}
+              child[parent anchor=west] {node[mod] {controller}}
+            }
+        }
+        child {node[mod] {ext sup}};
+    \end{tikzpicture}
+
+    \caption{Relationships between various Mnesia processes, in the 
+    form of a supervision
+    tree. Most of the logic for replication is inside \texttt{mnesia\_tm} 
+    (highlighted in blue). Modules added by Hypermnesia are highlighted in 
+    green. More details on the new modules are
+    discussed in~\cref{sec:impl overview}. Diagram partly based 
+    on~\cite{mattsson1999mnesiainternal}.}
+    \label{fig:mnesia struct}
+\end{figure*}
+
+
+
+\Cref{fig:mnesia struct} shows a brief overview of the modules in Mnesia according
+to the supervision relation.
+Erlang's fault tolerance model has the concept of a supervision tree~\cite{ericssonab2023otpdesign},
+a hierarchy of processes in charge of monitoring/supervising child processes
+for killing and restarting ``misbehaving'' processes. 
+
+\subsection{Data representation} \label{subsec:bg mnesia data repr}
+
+Mnesia stores data in Erlang records~\cite{ericssonab2023stdlib}.
+\Cref{tab:erl record} is an example of a student record, and this is how each row 
+of a Mnesia table is represented, with~\cref{lst:student rec} as the corresponding definition
+in Erlang.
+
+
+\begin{table}[htp]
+\centering
+\begin{tabular}{ccccc}
+  \toprule
+  student & id (key) & name & college & age \\ 
+  \midrule
+  & bb123 & Bruce Banner & Avengers & 54 \\
+  & ts233 & Tony Stark & Avengers & 50 \\
+  & sg333 & Steve Rogers & Avengers & 100 \\
+  \bottomrule
+\end{tabular}
+\caption{An example Mnesia table for student information.}
+\label{tab:erl record}
+\end{table}
+
+\begin{listing}[htp]
+\centering
+\begin{minted}[xleftmargin=30pt]{erlang}
+  -record(student, 
+    {id :: integer(), 
+    name:: string(), 
+    college :: string(),
+    age:: integer()}).
+\end{minted}
+\caption{Erlang record definition for a student.} 
+\label{lst:student rec}
+\end{listing}
+
+
+
+
+\subsection{Access contexts} \label{subsec:mnesia access contexts}
+
+A central API provided by Mnesia for table manipulation is given in~\cref{lst:mnesia activity}.
+A user calls the \mintinline{erlang}{activity} function which takes in: 
+
+\begin{enumerate}
+  \item A \mintinline{erlang}{Kind} of activity, also called a \emph{access context}.
+  Currently supported contexts include transactions and dirty operations;
+  \item A function (\mintinline{erlang}{Fun});
+  \item Arguments to be passed to the function (\mintinline{erlang}{Args});
+  \item The module in which the function is defined (\mintinline{erlang}{Mod}).
+\end{enumerate}
+
+There are two almost equivalent\footnote{Subtle differences between these two \acrshortpl{api}
+can be found in the reference guide~\cite{ericssonab2023mnesiaref}} ways of 
+using this API, and \cref{lst:dirty trans api} provides an example of
+writing a tuple \verb|{k,v}| into the table \verb|tab_name| and then reading it out.
+I use the convention of \verb|function_name/arity| to represent Erlang functions
+in these code examples and the rest of this report.
+
+
+\begin{listing}[htp]
+  \centering
+  \begin{minted}[frame=lines]{erlang}
+  mnesia:activity(Kind, Fun, Args :: [Arg :: term()], Mod) -> t_result(Res) | Res 
+    where Kind = activity()
+    Fun = fun((...) -> Res)
+    Mod = atom()
+  \end{minted}
+  \caption{Mnesia table manipulation API.}
+  \label{lst:mnesia activity}
+\end{listing}
+
+\begin{listing}[htp]
+  \begin{sublisting}{0.46\linewidth}
+    \begin{minted}[frame=lines]{erlang}
+      mnesia:activity(transaction, fun () -> 
+        mnesia:write({tab_name, k, v}),
+        mnesia:read({tab_name, k})
+      end).
+    \end{minted}
+    \caption{transaction with \texttt{activity/2}}
+  \end{sublisting}
+  \hfill
+  \begin{sublisting}{0.46\linewidth}
+    \begin{minted}[frame=lines]{erlang}
+      mnesia:activity(async_dirty, fun () -> 
+        mnesia:write({tab_name, k, v}),
+        mnesia:read({tab_name, k})
+      end).
+    \end{minted}
+    \caption{asynchronous dirty with \texttt{activity/2}}
+  \end{sublisting}
+  \begin{sublisting}{0.46\linewidth}
+    \begin{minted}[frame=lines]{erlang}
+      mnesia:transaction(fun () -> 
+        mnesia:write({tab_name, k, v}),
+        mnesia:read({tab_name, k})
+      end).
+    \end{minted}
+    \caption{transaction with \texttt{transaction/1}}
+  \end{sublisting}
+  \hfill
+  \begin{sublisting}{0.46\linewidth}
+      \begin{minted}[frame=lines]{erlang}
+        mnesia:async_dirty(fun () -> 
+          mnesia:write({tab_name, k, v}),
+          mnesia:read({tab_name, k})
+        end).
+      \end{minted}
+    \caption{asynchronous dirty with \texttt{async\_dirty/1}}
+    \label{sublst:async dirty write}
+  \end{sublisting}
+  \caption{Comparing transaction and asynchronous dirty operations API.}
+  \label{lst:dirty trans api}
+\end{listing}
+
+
+\paragraph{Transactions} in Mnesia provide ACID properties~\cite{ericssonab2023mnesiaguide}.
+While this is attractive, it also incurs large performance overhead 
+and hence a full-fledged transaction might not be suitable for all tasks.
+For example, in a datagram routing application, it can be too slow to initiate
+a transaction each time a packet is received~\cite{ericssonab2023mnesiaguide}.
+The underlying implementation of Mnesia uses two-phase commit
+for distributed transactional atomicity, write-ahead logging for durability and consistency, 
+and two-phase locking for isolation.
+
+
+\paragraph{Dirty operations} in Mnesia bypass most transactional processing
+and operate directly on the data. Therefore they are much faster 
+(at least \(10\)x~\cite{ericssonab2023mnesiaref}) than transactions. As a consequence,
+they lose the ACID properties. However, dirty operations still provide 
+some level of consistency such as no garbled records for individual dirty reads.
+The underlying implementation of dirty operations follows this pattern:
+when the function is called, the operation is first performed
+on the local table. Then relevant information is collected including
+the Erlang record, the target table, and so on. These are then sent 
+to other replicas in the cluster.
+Mnesia does not examine the content in the table during this process. This 
+property is useful in helping us choose a \acrshort{crdt},
+as we will see later that some \acrshortpl{crdt} require examinations of the state
+before broadcasting the message (\cref{subsec:impl choose crdt}).
+On the receiving side, the transaction manager monitors and
+applies the received message accordingly.
+
+\subsection{Consistency and availability} \label{subsec:bg cap}
+
+The CAP theorem~\cite{gilbert2012cap} forces a system to choose between consistency
+and availability during a network partition. Mnesia responds to this problem by 
+taking \emph{no} stance with respect to the CAP theorem~\cite{andersen2014mnesiacap},
+but leaves the handling of the recovery process entirely 
+to the developer~\cite{ericssonab2023mnesiaguide}, often resulting in a manual restart
+of the Mnesia nodes after partitions. Recent improvements have incorporated
+the feature to allow developers to set the \texttt{majority} option which disallows 
+any non-dirty operation to a table not in a majority quorum. This option
+is useful for preventing conflicts for critical data, but sacrifices the availability
+of the database further and only works for transactions. There is also a
+\verb|set_master_nodes/2| function which unconditionally loads data from the master node
+after a partition. It can be useful in some cases, but is a rather ``brutal''
+way of handling partitions since it might lead to data loss.
+
+Erlang's built-in distribution protocol has a failure detector that periodically 
+sends heartbeats. If a node does not receive a heartbeat from
+another node for some time, then the failure detector considers that node dead
+and disconnects itself. Mnesia relies on Erlang's failure detector to function,
+and two possible situations can occur during a network partition (NP):
+
+\begin{enumerate}[label={NP\arabic*.},ref={NP\arabic*}]
+  \item The partition is a \emph{transient failure} in which the failure 
+  detector does not consider
+  a temporarily unresponsive node dead. In this case, operations can carry on
+  as usual, but transactions will stall since the two-phase commit protocol requires
+  responses from all participating nodes. Dirty operations can be performed as usual.
+  When the partition heals, buffered messages will then be delivered.
+  But dirty operations risk the database being in an inconsistent 
+  state when the network heals, as we shall see in~\cref{subsec:impl communication failure}.
+  \label{itm:transient partition}
+  \item The partition lasts long enough that the failure detector detects the
+  \emph{communication failure} and disconnects the nodes it thinks have failed. 
+  In this case, Mnesia would 
+  reconfigure itself and perform future operations without the failed nodes, i.e.\ Mnesia considers
+  itself as having a new cluster with only the members still alive. 
+  When the partition heals, Mnesia
+  logs an error message saying that the database might be inconsistent
+  and ask the developer to fix this issue manually. \label{itm:comm failure}
+\end{enumerate}
+
+
+\subsection{CRDTs} \label{sec:bg crdt}
+
+\acrfullpl{crdt}~\cite{preguica2018CRDT,shapiro2011CRDT} are a family of replicated 
+data types with a common set of properties 
+that enable operations to be performed locally on each node while always converging
+to a final state among replicas if they receive the same set of updates. 
+There are two types of \acrshortpl{crdt}: state 
+based (\cref{subsec:bg state-based crdt}) and operation 
+based (\cref{subsec:bg op-based crdts}). 
+Each of them is discussed in detail with examples below.
+
+\subsection{State-based CRDTs}  \label{subsec:bg state-based crdt}
+
+Here I provide a summary of the properties of state-based \acrshortpl{crdt}. 
+Refer to~\cref{appendix:state-based} 
+and~\cite{vanderlinde2016delta-CRDTs,almeida2018DeltaCRDT,shapiro2011CRDT,preguica2018CRDT}
+for mathematical details and examples. 
+
+A state-based \acrshort{crdt} communicates by propagating its state of 
+the data structure with other parties, and performs the merge operation with a merge
+(sometimes called join) operator to converge towards the \acrfull{lub} of
+two states. The merge operator must be commutative, idempotent and
+associative to guarantee the convergence property (\cref{prop:state crdt convergence}),
+which is key to eventual consistency.
+
+\begin{proposition}[\cite{shapiro2011CRDT}] \label{prop:state crdt convergence}
+  Any two object replicas of a state-based \acrshort{crdt} eventually converge, 
+  assuming the system transmits payload infinitely often between pairs of replicas over
+  eventually-reliable point-to-point channels.
+\end{proposition}
+
+Propagating the entire states of a (big) data structure can often be expensive.
+Therefore \acrfullpl{dcrdt}~\cite{almeida2018DeltaCRDT} is proposed. It
+disseminates only the changing parts of the state as 
+a \(\delta\)-state, reducing communication costs.
+Due to their simple requirements on the channel, \acrshortpl{dcrdt} often
+have complex logic in managing and disseminating states.
+
+
+\subsection{Operation-based CRDTs} \label{subsec:bg op-based crdts}
+
+Operation-based (op-based) \acrshortpl{crdt} send the operation performed on 
+the \acrshort{crdt} object (as opposed to the state) along with some metadata.
+An op-based \acrshort{crdt} typically requires two \emph{concurrent}
+operations \(f\) and \(g\) to 
+be commutative under the causal delivery order \(<_d\): 
+\(f \parallel_d g \iff f\not <_d g \land g\not <_d f\). 
+
+For this reason, a causal delivery channel is often required for op-based
+\acrshortpl{crdt} to work. Given such a channel, the following 
+property (\cref{prop:op crdt convergence}) holds:
+
+\begin{proposition}[\cite{shapiro2011CRDT}] \label{prop:op crdt convergence}
+  Any two replicas of an op-based \acrshort{crdt} eventually converge under reliable broadcast
+  channels that deliver operations in delivery order \(<_d\).
+\end{proposition}
+
+One advantage of op-based \acrshortpl{crdt} is their communication efficiency.
+Using a set as an example data structure, instead of sending the
+entire set with all its elements,
+op-based set can just send operations like \texttt{add} or \texttt{delete}.
+This could significantly reduce the communication cost, especially when the set is large.
+
+Given the stronger assumption on the channel, designers of op-based \acrshortpl{crdt}
+only need to choose how they want to
+order concurrent operations, an example of a particular type (which is also
+the one implemented in Hypermnesia) of op-based \acrshortpl{crdt} is given below.
+
+\subsubsection{Pure op-based CRDTs}
+
+The definition of the original op-based \acrshortpl{crdt} makes the separation 
+between state-based and op-based \acrshortpl{crdt} less clear in that an op-based
+\acrshortpl{crdt} can often include state information while sending operations. 
+For example, before sending operation \texttt{add(1)} on a set, the state of the 
+set can be inspected and the entire set can be added as the ``operation''. It also has 
+a relatively high implementation complexity~\cite{bauwens2021Reactivity}. 
+To address this, pure op-based \acrshortpl{crdt} were 
+developed~\cite{baquero2017PureOp,baquero2014PureOp}, which forbids inspecting
+the state \(\sigma\) while generating the message \(m\).
+
+I now illustrate pure op-based \acrshortpl{crdt} with an example \acrfull{awset}.
+\Cref{lst:pure op-based awset} is the conceptual view of implementing it.
+Typically there are three operations on an op-based \acrshort{crdt}: a generator
+\verb|prepare|, which turns the operation \(o_i\) on the current state \(\sigma_i\) into a 
+message \(m_i\) that is sent via reliable causal broadcast; an effector 
+\verb|effect|, which receives the message \(m\) and applies it onto the current state \(\sigma_j\)
+and produces a new state \(\sigma'_j\); and \verb|eval|, which takes an operation,
+such as lookup an element in a set and the current state \(\sigma_i\), and returns
+the result of the operation.
+For pure op-based \acrshortpl{crdt}, data and timestamps need to be stored in 
+a \emph{\acrfull{polog}}~\cite{baquero2017PureOp,baquero2014PureOp},
+partially ordered by the timestamp attached to each operation. This aims to 
+identify causal relationships between different elements, which is important
+for the convergence property (\cref{prop:op crdt convergence}).
+
+\begin{listing}[htp]
+  \begin{align*}
+    \Sigma: T&\hookrightarrow O \\
+    \mathrm{prepare}_i(o, s) &= o \\
+    \mathrm{effect}_i(o, t, s) &= s \cup \{(t, o)\} \\
+    \mathrm{eval}_i(\mathrm{elems}, s) &= \{v \mid (t, [\mathrm{add}, v]\in s \land 
+    \not\exists (t', [\mathrm{rmv}, v]\in s\cdot t < t'))\}
+  \end{align*}
+  \caption{A pure op-based \acrshort{awset} implementation, adapted 
+  from~\cite{baquero2017PureOp}.}
+  \label{lst:pure op-based awset}
+\end{listing}
+
+
+The \acrshort{polog} (\(\Sigma\)) for the \acrshort{awset} is a partial function from 
+timestamps to operations (with appropriate payload).
+Note that the effector takes three arguments,
+the operation \(o\), timestamp \(t\) and state \(s\), and it simply unions
+the operation and timestamp with the current state (i.e.\ appending it to the log), 
+leaving the complexity
+to the lookup function. This is a fairly space-expensive operation, since all operations
+need to be stored in the log including deletions. Optimisations are discussed
+later in \cref{sec:impl pawset}.
+
+
+\subsection{Summary}
+
+In this chapter, we discussed transactions, weak and eventual 
+consistency (\cref{sec:bg consistency models}), the first two are offered by Mnesia
+(\cref{sec:bg mnesia}), and this project aims to provide the last.
+A family of data structures, (\acrshortpl{crdt}) are also described (\cref{sec:bg crdt})
+to show how they help achieve eventual consistency.

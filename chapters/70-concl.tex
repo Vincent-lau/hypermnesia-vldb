@@ -1,0 +1,64 @@
+\section{Conclusion} \label{sec:concl}
+% As you might imagine: summarizes the dissertation, and draws any
+% conclusions. Depending on the length of your work, and how well you
+% write, you may not need a summary here.
+
+% You will generally want to draw some conclusions, and point to
+% potential future work.
+
+In this project, we looked at Hypermnesia, an extension to the Mnesia \acrshort{dbms}
+incorporating eventual consistency. We conclude
+this report by summarising the accomplishments of Hypermnesia, highlighting
+key contributions (\cref{sec:concl accomplishments}) and
+pointing out ways Hypermnesia can be improved in the future (\cref{sec:concl future}).
+
+
+\subsection{Accomplishments} \label{sec:concl accomplishments}
+
+Qualitatively speaking, Hypermnesia's API is designed to minimise the amount of 
+code refactoring (\cref{sec:impl design}) and fits well into the existing Mnesia 
+access contexts, making it easier to be adopted in existing open source codebases
+(\cref{sec:eval api}) such as RabbitMQ and 
+ejabberd~\cite{vmware2023rabbitmq,processone2023ejabberd}.
+Moreover, the new eventual consistency API passes the extended Mnesia regression 
+test suite (consisting of \(\approx 5000\) unit tests), including (\(\approx 20\)) 
+additional tests that cover network partition, \acrshort{awset} and \acrshort{rwset} 
+behaviours and causal broadcast (\cref{sec:eval correctness}). It also allows the database to 
+continue operating while there is a partition and automatically resolves potential 
+conflicts after the partition recovers (\cref{sec:eval fault tolerance}).
+
+Quantitatively speaking, Hypermnesia accomplishes the above functionalities
+while providing about \(10\)--\(20\) times higher throughput and 
+lower latency than Mnesia's transactions (\cref{sec:eval benchmarks}). Thanks to Mnesia's
+performant dirty operations, Hypermnesia can be designed to guarantee eventual 
+consistency without sacrificing much performance, taking advantage of the
+performant architecture of dirty operations.
+
+
+\subsection{Future work} \label{sec:concl future}
+
+Finally, I list some possible extensions to Hypermnesia:
+
+\begin{itemize}
+  \item At the moment \acrshort{ec} operations do not interact well with Mnesia's
+  transactions and dirty operations, i.e.\ they cannot be used on the same table.
+  As mentioned in~\cref{subsec:related mvcc}, it is possible to add support for
+  transactions that execute and update queries on a
+  consistent snapshot and then resolve conflicts between different snapshots
+  with \acrshortpl{crdt}, and there are many protocols developed for this 
+  purpose~\cite{preguica2014SwiftCloud,shapiro2018Antidote}.
+  Now that Mnesia has built-in support for \acrshortpl{crdt} and \acrlong{ec},
+  it could be further enhanced to support lightweight but highly available
+  transactions.
+  \item Hypermnesia currently works for in-memory tables only. Although in-memory 
+  caching tends to be the way Mnesia is used~\cite{mattsson1998mnesia},
+  Hypermnesia could be extended to support disk tables in the future, or even 
+  custom backends. Different data structures might open the door 
+  for better space optimisation which is currently less feasible 
+  with \texttt{ets} and \texttt{dets}.
+  \item Hypermnesia chooses to use pure op-based \acrshortpl{crdt} for its simplicity
+  and similarity to Mnesia's architecture. \acrshortpl{dcrdt} is another popular
+  choice among eventually consistent databases~\cite{klophaus2010Riak}, which might
+  be worthwhile experimenting with. 
+\end{itemize}
+

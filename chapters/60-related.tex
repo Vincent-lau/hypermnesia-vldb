@@ -1,0 +1,146 @@
+\section{Related work} \label{sec:eval}
+% This chapter covers relevant (and typically, recent) research
+% which you build upon (or improve upon). There are two complementary
+% goals for this chapter:
+% \begin{enumerate}
+%   \item to show that you know and understand the state of the art; and
+%   \item to put your work in context
+% \end{enumerate}
+
+% Ideally you can tackle both together by providing a critique of
+% related work, and describing what is insufficient (and how you do
+% better!)
+
+% The related work chapter should usually come either near the front or
+% near the back of the dissertation. The advantage of the former is that
+% you get to build the argument for why your work is important before
+% presenting your solution(s) in later chapters; the advantage of the
+% latter is that don't have to forward reference to your solution too
+% much. The correct choice will depend on what you're writing up, and
+% your own personal preference.
+
+The field of database research is a dynamic and broad domain that encompasses a
+variety of topics. This chapter focuses on the architecture and design of eventually 
+consistent databases (\cref{sec:related db}).
+Similarly, for \acrshortpl{crdt} (\cref{sec:related crdt}), this chapter surveys 
+them in the context of how they impact the design and implementation of Hypermnesia.
+
+
+\subsection{Databases and eventual consistency} \label{sec:related db}
+
+\subsubsection{Mnesia and eventual consistency}
+
+Mnesia's lack of automatic conflict resolution has been problematic for developers 
+using it~\cite{mineiro2008DukesofErl,wiger2010unsplitmail}. 
+Unsplit~\cite{wiger2023unsplit}, an external library for Mnesia, allows for user-defined
+merge logic but requires developers to define the custom logic.
+ForgETS~\cite{vorontsov2018forgETS} is WhatsApp's Mnesia ``drop-in'' replacement
+database, aiming to provide Mnesia's missing features such as auto reconciliation and auto
+reconnection. ForgETS uses the last-write-wins strategy for conflict resolution.
+However, ForgETS is a proprietary database influenced by WhatsApp's operational
+experience, and the details of its effectiveness are unknown. Moreover, ForgETS
+is a standalone database built on top of \texttt{ets}, while
+Hypermnesia aims to extend Mnesia to support automatic resolution natively.
+
+
+\subsubsection{Key-value stores}
+
+Key-value stores like Redis\footnote{\url{https://redis.com}} serve as a caching 
+layer between servers and databases, offering an Active-Active architecture that allows
+replicated database instances to distribute over different (possibly distant) locations.
+Redis is an advanced system with many more features such as expiring keys,
+and uses op-based \acrshortpl{crdt} for conflict resolution between different 
+instances~\cite{redis2022rediscrdt}. While Mnesia has a similar use case, it is
+primitive and embedded into the Erlang ecosystem. 
+Mnesia can provide a faster response time than Redis when used on a smaller scale,
+thanks to its shared address space with the application. This research aims
+to enhance Mnesia with stronger non-transactional consistency models
+found in a general purpose in-memory database (like Redis), reducing
+the constraints when developers opt for Mnesia as the choice of their Erlang applications.
+
+% mnesia has a specific use case, 
+% smaller use case, small amount of data, caching layer
+% fast
+% experienced developers work with it lack of documentation
+% add ec so that developers will use it
+
+\subsubsection{Multi-version concurrency control} \label{subsec:related mvcc}
+
+SwiftCloud~\cite{preguica2014SwiftCloud} is a fault-tolerant geo-replicated 
+transactional system. It provides causally
+consistent snapshots for each transaction with object versioning. As a geo-replicated system, 
+SwiftCloud allows local operations to be performed on the client without going
+through the server but only when they operate on mergeable data 
+types (e.g.\ \acrshortpl{crdt}) during a transaction. Antidote database~\cite{shapiro2018Antidote} 
+goes one step further, integrating \acrshort{tcc} with stronger consistency models and
+allowing developers to choose between them.
+
+\acrfull{mvcc} is a popular technique used in conjunction with
+\acrshortpl{crdt} to provide eventual or sometimes even transactional consistency.
+Mnesia does not support object versioning by default, so
+adding \acrshort{mvcc} requires extensive work. In this project, we focus
+on adding eventual consistency and leave the integration of \acrshort{mvcc} and 
+\acrshortpl{crdt} as future work (\cref{sec:concl future}).
+
+
+\subsubsection{Augmenting existing embedded databases}
+
+SQLite\footnote{\url{https://sqlite.org/index.html}} is one of the most widely 
+used embedded SQL database engines in the world~\cite{hipp2019sqlite}. 
+It does not have built-in support for replication, but there has been work that 
+extend it for local-first software~\cite{tomter2021SQLitelocal} with
+\acrfullpl{crr}: \acrshortpl{crdt} applied to relational databases~\cite{yu2020CausalLen}.
+They use a two-layer architecture: an application layer for handling client requests,
+and a \acrshort{crr} layer for conflict resolution and anti-entropy protocols.
+However, their work still remains in progress and it is not clear how effective their
+approach is in terms of overheads. ElectricSQL\footnote{\url{https://electric-sql.com}} 
+is another attempt to augment SQLite with local-first behaviours. 
+It uses RichCRDT~\cite{balegas2022richcrdt}, which are \acrshortpl{crdt}
+extended with database guarantees, based on ideas from Antidote.
+
+These techniques for enhancing SQLite are similar in spirit to Hypermnesia. However,
+SQLite is a rather general purpose single-node database receiving constant developments.
+In contrast, Mnesia is integrated with the Erlang ecosystem and designed as a 
+distributed database, hence they have different use cases.
+Moreover, to the best of our knowledge, there is no performance evaluation on 
+these extensions to SQLite yet.
+
+\subsection{CRDTs research} \label{sec:related crdt}
+
+\subsubsection{Systems using CRDTs} \label{subsec:related crdt system}
+
+\acrshortpl{crdt} are often used in collaboration software such
+as shared text editors~\cite{weiss2010Logoot} to provide local-first 
+behaviours~\cite{kleppmann2019local-first}, i.e.\ users
+of the editors can keep typing into the document despite unstable networks.
+It has then found its use in areas such as synchronisation on the edge and
+opportunistic networks~\cite{guidec2023opportunistic,yu2020crr}. 
+These systems typically have constrained network or computing resources and 
+\acrshortpl{crdt} can be used to delay synchronisation and respond to the user first. 
+
+Researchers have been investigating new areas where \acrshort{crdt} techniques
+can be applied. Hypermnesia does not aim to apply \acrshortpl{crdt} in a novel
+way but rather to experiment with their suitability in an embedded database like Mnesia.
+
+\subsubsection{Time and space improvements} \label{subsec:related crdt performance}
+
+\acrshortpl{crdt} are constantly invented and improved to reduce their resource 
+consumption.
+For example, the proposal of \acrshortpl{dcrdt}~\cite{almeida2018DeltaCRDT} is partly
+due to the 
+communication overhead of propagating the entire state in normal state-based
+\acrshortpl{crdt}. Pure op-based \acrshortpl{crdt}~\cite{baquero2014PureOp} were also 
+proposed to reduce the space overhead. \citet{bauwens2021Reactivity}
+further improve the reactivity and storage requirements of pure op-based
+\acrshortpl{crdt} by exposing more information from the causal broadcast 
+layer. \citet{vanderlinde2016delta-CRDTs} suggest a new way to 
+adapt \acrshortpl{dcrdt} for more unstable networks.
+Furthermore, \citet{bauwens2019crdtmemory} show a more eager way to remove metadata
+using acknowledgements from replicas.
+
+One research question of this project is to understand the overhead of
+eventual consistency in Mnesia. The space and time optimisations proposed are 
+useful for improving Hypermnesia's efficiency,
+therefore they are investigated in detail, and some of their ideas are
+used in Hypermnesia's implementation (\cref{sec:impl pawset}).
+

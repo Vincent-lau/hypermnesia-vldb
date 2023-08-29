@@ -1,0 +1,183 @@
+%TC:ignore
+This chapter complements~\cref{subsec:bg state-based crdt} with more formal details
+of state-based \acrshortpl{crdt}, along
+with examples. 
+
+\section{Properties}
+
+A state-based \acrshort{crdt} communicates by propagating the entire state of 
+the data type with other parties, and perform the merge operation with a merge
+(sometimes called join) operator to converge towards the least upper bound of the 
+two states. They are sometimes also referred to as \acrfullpl{cvrdt}. I start by
+defining some of the mathematical properties that state-based \acrshortpl{crdt},
+leading towards its convergence property (\cref{prop:crdt convergence}), which
+are essential in eventual consistency.
+
+\begin{definition}[\acrfull{lub}~\cite{shapiro2011CRDT}]
+
+We define the \acrshort{lub} of two states \(x\) and \(y\), partially
+ordered by \(\sqsubseteq_v\) to be \(m=x \sqcup_v y\), and there is no \(m'\) such that
+\(x\sqsubseteq_v m' \land y\sqsubseteq_v m'\). The operator defined above \(\sqcup_v\)
+is also called the join operator.
+
+\end{definition}
+
+We observe that the join operator is idempotent 
+(\(x\sqcup y = x\sqcup y \sqcup y = x\sqcup x \sqcup y\)),
+commutative (\(x\sqcup y = y\sqcup x\)) and associative.
+We then define the join semilattice to be:
+
+\begin{definition}[Join Semilattice~\cite{davey_priestley_2002}]
+  An ordered set \((S, \sqsubseteq_v)\), equipped with a join operator \(\sqcup_v\) 
+  is a join semilattice if and only if \(\forall x, y\in S, \exists m = x\sqcup_v y\)
+\end{definition}
+
+Now a state-based \acrshort{crdt} consists of a triple \((S, M, Q)\) where \(S\)
+is a join semilattice, \(Q\) is a set of \emph{query functions} and \(M\) is a set of
+\emph{mutators}, where each \(m\) takes in one state \(X\in S\) and produce a new state
+\(X'=m(X)\). Moreover, mutators are defined to be \emph{inflations}, i.e., for
+any \(m\) and \(X\), we have \(X\sqsubseteq m(X)\).
+
+This definition gives us some nice properties of state-based \acrshortpl{crdt}.
+In particular, if we define our merge operator to be the join operator over
+the join semilattice, then our merge process is converging towards the \acrshort{lub} 
+of the most recent values. 
+As an example, we consider the ordered set of natural numbers as \((\mathbb N, <)\),
+ordered by the less-than relation. Then this is indeed a join semilattice
+since the \(\max\) operator acts as the \acrshort{lub} of every two natural numbers
+\(x\) and \(y\), i.e.\ \(x\sqcup y = \max(x,y)\). This property of the join 
+semilattice gives the following guarantee:
+
+\begin{proposition}[\cite{shapiro2011CRDT}] \label{prop:crdt convergence}
+  Any two object replicas of a state-based \acrshortpl{crdt} eventually converge, 
+  assuming the
+  system transmits payload infinitely often between pairs of replicas over
+  eventually-reliable point-to-point channels.
+\end{proposition}
+
+Note that we still require delivery of states to guarantee convergence,
+i.e.\ we need every message to eventually reach every replica of the cluster.
+However, this is the only requirement, since the \verb|merge| operator is idempotent and
+commutative, we can tolerate arbitrary message reordering and repeated delivery
+of messages.
+
+The downside of the state-based \acrshort{crdt} is that it requires the dissemination
+of the entire state, which makes it not suitable for collections of large states,
+such as a big set of elements. \citet{almeida2018DeltaCRDT} proposes a variant
+of state-based \acrshortpl{crdt} to address this issue, which we discuss below.
+
+\section{Delta-state CRDTs} \label{subsec:delta state-based}
+
+\acrfullpl{dcrdt}~\cite{almeida2018DeltaCRDT} is a new kind of state-based 
+\acrshortpl{crdt} that disseminates only the changing part of the operation as 
+a \(\delta\)-state, hence reducing the communication cost.
+
+\begin{definition}[Delta-mutator~\cite{almeida2018DeltaCRDT}]
+  A delta-mutator \(m^\delta\) is a function, corresponding to an update operation, 
+  which takes a state \(X\) in a join semilattice \(S\) as its parameter and returns
+  a delta-mutation \(m^\delta(X) \in S\).
+\end{definition}
+
+\begin{definition}[Delta-group~\cite{almeida2018DeltaCRDT}]
+  A delta-group is inductively defined as either a delta-mutation or a join of
+  several delta-groups. 
+\end{definition}
+
+\begin{definition}[\(\delta\)-\acrshort{crdt}~\cite{almeida2018DeltaCRDT}]
+  A \(\delta\)-\acrshort{crdt} consists of a triple \((S, M^\delta, Q)\), where
+  \(S\) and \(Q\) are defined as before, and \(M^\delta\) is a set of delta-mutators.
+  The state transition is defined to be one of the below:
+
+  Joining with a delta-state:
+  \[
+    X' = X\sqcup m^\delta(X) 
+  \]
+
+  Joining with a delta-group \(D\):
+  \[
+    X' = X\sqcup D 
+  \]
+\end{definition}
+
+This definition decouples the state transition from applying the mutation, since
+now we first mutate to get a delta-state, then we apply the join to change our
+state. The results of a \(\delta\)-mutator looks almost like producing an operation
+in op-based \acrshortpl{crdt}, apart from the requirement that the result must
+also be a state in the join semilattice.
+
+This definition is sufficient if the \acrshort{crdt} that we want to build does
+not require causal consistency, such as a counter. But more is needed if we do
+care about causal order, like (the addition and deletion in a) set. We therefore 
+make some additional constructions:
+
+A \emph{causal context} (sometimes also called \emph{causal history}) is a collection 
+of events/dots defined as follows~\cite{almeida2018DeltaCRDT}:
+
+\begin{align*}
+  \mathrm{CausalContext} &= \mathcal P(\mathbb I\times \mathbb N) \\
+  \max_i(c) &= \max(\{n\ |\ (i, n)\in c\} \cup \{0\}) \\
+  \mathrm{next}_i(c) &= (i, \max_i(c) + 1)
+\end{align*}
+
+\noindent where \(\mathbb I\) is the set of replica identifiers, \(\mathbb N\)
+is the natural numbers. A causal context allows us to tag each event in our system
+with a unique identifier (or a \emph{dot}) \((i, n)\), signalling that the event 
+happens at replica \(i\) at point \(n\). 
+
+A \emph{dot store} acts as a container for data-type specific information. It can be
+queried with the \verb|dots| function which takes in a dot store and returns the 
+set of dots in the store. There are three types of dot store, defined as~\cite{almeida2018DeltaCRDT}
+
+\begin{align*}
+  \mathrm{DotSet}:\mathrm{DotStore} &= \mathcal P(\mathbb I\times \mathbb N) \\
+  \mathrm{DotFun}\langle V:\mathrm{Lattice}\rangle: \mathrm{DotStore} &= \mathcal P(\mathbb I\times \mathbb N) \hookrightarrow V \\ 
+  \mathrm{DotMap}\langle K, V:\mathrm{DotStore}\rangle: \mathrm{DotStore} &= K\hookrightarrow V
+\end{align*}
+
+And we can now combine the causal context and dot store to construct states for
+\acrshortpl{dcrdt}~\cite{almeida2018DeltaCRDT}:
+
+\begin{listing}[htp]
+  \centering
+\begin{align*}
+  \mathrm{Causal}\langle T:\mathrm{DotStore}\rangle &= T\times \mathrm{CausalContext} \\
+  \mathbf{when} &\qquad T:\mathrm{DotSet} \\
+  (s,c)\sqcup (s',c') &= ((s\cap s')\cup (s\setminus c')\cup(s'\setminus c),c\cup c') \\
+  \mathbf{when} &\qquad T:\mathrm{DotMap}\langle \_, \_\rangle \\
+  (m, c) \sqcup (m', c') &= (\{k\mapsto v(k)\ |\ k\in \mathrm{dom}\ m \cup \mathrm{dom}\ m' \land v(k) \neq \bot\}, c \cup c') \\
+  \mathbf{where}&\ v(k) = \mathrm{fst}((m(k), c) \sqcup (m'(k), c))
+\end{align*}
+  \caption{The join semilattice for \acrshortpl{dcrdt}, adapted from~\cite{almeida2018DeltaCRDT}.}
+  \label{lst:delta crdt lattice}
+\end{listing}
+
+
+\section{Example: Delta-State set CRDT}
+
+With the causal context and dot store above, we can now define our delta-state
+add-wins set in~\cref{lst:delta state set}. A \acrshort{dcrdt} add-wins set
+consists of a pair of a dot map and a causal context.
+For such a set, when we add an element, the delta mutator \(add^\delta\) generates a
+singleton map from the element to a dot, and the causal context is only concerned
+with the new tag and all the previous tags associated with the added element. When we
+remove an element, the dot map is replaced with an empty map and the causal context
+with all the previous tags associated with the element, this will cause the
+element \(e\) to be removed during the next join (because it is in the causal context
+but not in the dot store, according to the join rule in~\cref{lst:delta crdt lattice}). 
+Look-up is just examining the
+domain of the dot map, i.e.\ everything that is in the dot map \(m\) is considered to be
+in the set.
+
+\begin{listing}[htp]
+  \begin{align*}
+    \mathrm{AWSet}\langle E\rangle &= \mathrm{Causal}\langle \mathrm{DotMap}\langle E, \mathrm{DotSet} \rangle\rangle \\
+    \mathrm{add}_i^\delta(e, (m, c)) &= (\{e\mapsto d\}, d\cup m(e))\quad \mathbf{where}\ d=\{\mathrm{next}_i(c)\} \\
+    \mathrm{remove}_i^\delta(e, (m, c)) &= (\{\}, m(e)) \\
+    \mathrm{clear}_i^\delta((m, c)) &= (\{\}, \mathrm{dots}(m)) \\
+    \mathrm{elements((m, c))} &= \mathrm{dom}\ m
+  \end{align*}
+ \caption{\acrshort{dcrdt} set specification, adapted from~\cite{almeida2018DeltaCRDT}.} 
+ \label{lst:delta state set}
+\end{listing}
+
+%TC:endignore

@@ -1,0 +1,91 @@
+%TC:ignore
+An algorithm for the pure op-based \acrshort{rwset} is shown in~\cref{algo:prwset}.
+
+
+\begin{algorithm}[htp]
+  \DontPrintSemicolon
+  \SetKwProg{Fn}{function}{:}{}  
+
+  \SetKwFunction{Add}{add} \SetKwFunction{Delete}{delete} \SetKwFunction{Read}{read}
+  \SetKwFunction{Stablise}{stablise}
+  \SetKwFunction{Red}{redundant} \SetKwFunction{Reify}{reify}
+  \SetKwFunction{RemoveRed}{remove\_redundant}
+  \SetKwFunction{App}{append} \SetKwFunction{Rmv}{remove}
+
+
+  \SetKwData{Msg}{msg} \SetKwData{Sender}{sender}
+  \SetKwData{polog}{POLog}
+  \SetKwData{true}{true} \SetKwData{false}{false}
+  \SetKwData{noop}{no-op} \SetKwData{add}{add} \SetKwData{delete}{delete}
+  \SetKwData{clear}{clear}
+  \SetKwData{NoDel}{nodel}
+
+  \(\polog \leftarrow []\) \;
+
+
+  \Fn(){\Add{\(e, t\)}} {
+    \RemoveRed{\(e, t, \add\)} \;
+    \For{\((e',t',o')\in \polog\)}{
+      \If{\Red{\((e,t,\add),(e',t',o')\)}}{
+        \KwRet{} \;
+      }
+    }
+    \(\polog \leftarrow \App{\polog, \((e,t,\add)\)} \) \;
+  }
+
+  \Fn(){\Delete(\(e, t\))} {
+    \RemoveRed{\(e, t, \delete\)}\;
+
+    \For{\((e',t',o')\in \polog\)}{
+      \If{\Red{\((e,t,\delete),(e',t',o')\)}}{
+        \KwRet{} \;
+      }
+    }
+    \(\polog \leftarrow \App{\polog, \((e,t,\delete)\)} \) \;
+
+  }
+   
+  \Fn(){\Read{\(k\)}} {
+    \For{\((e,t,o) \in \polog\)}{
+      \If{\(e.\mathrm{key} = k\)} {
+        \(\NoDel \leftarrow \true\) \;
+        \For{\(e,t,o \in \polog\)} {
+          \If{\(e.\mathrm{key} = k\land o=\delete\)}  {
+            \(\NoDel \leftarrow \false\) \;
+          }
+        }
+        \If{\(\NoDel\)} {
+          \KwRet{\(e\)} \;
+        }
+      }
+    }
+    \KwRet{\(\mathrm{undefined}\)} \;
+  }
+
+  \Fn(){\RemoveRed(\(e,t,o\))} {
+    \For{\((e',t',o') \in \polog\)}{
+      \If{\Red{\((e',t',o'),(e,t,o)\)}}{
+        \(\polog \leftarrow \Rmv{\(\polog, (e',t',o')\)}\) \;
+      } 
+    }
+  }
+
+  \Fn(){\Red((e,t,o), (e',t',o'))} {
+    \tcc{check whether \((e,t,o)\) is made redundant by \((e',t',o')\)}
+    \If{\(e = e' \land t < t'\)}{
+        \KwRet{\true} \;
+     } \Else{
+        \KwRet{\false} \;
+     }
+  }
+
+
+  \Fn(){\Reify{\(e,t,o\)}} {
+    \RemoveRed{\(e,t,o\)} \;
+  }
+  \caption{Pure \acrshort{rwset} pseudocode, defined in terms of usual set operations.
+  Note this is pseudocode sacrifices efficiency for clarity. Ideas are taken 
+  from~\cite{baquero2017PureOp,baquero2014PureOp,bauwens2021Reactivity}.}
+  \label{algo:prwset}
+\end{algorithm}
+%TC:endignore

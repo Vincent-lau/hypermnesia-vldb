@@ -1,0 +1,189 @@
+\section{System design} \label{sec:design}
+
+This chapter provides an account of Hypermnesia's design and implementation. 
+Hypermnesia's API and the selection of a \acrshort{crdt} are discussed
+in~\cref{sec:impl design}, with alternative options also considered.
+Subsequently, the implementation is outlined in~\cref{sec:impl overview} at a high 
+level before diving into three key components: causal 
+broadcast, Set \acrshort{crdt} and fault tolerance 
+from~\crefrange{sec:impl cbcast}{sec:impl fault tolerance}. 
+
+
+
+\subsection{API design} \label{subsec:impl api}
+
+Hypermnesia's API is designed with the research question \cref{itm:question ec refactor}
+on refactoring in mind. We consider the SOLID principle~\cite{martin2000solid}
+with the following design goals (DGs):
+
+\begin{enumerate}[label={DG\arabic*.},ref={DG\arabic*}]
+  \item \textbf{Backwards compatibility and code refactoring.} Hypermnesia should be
+  backwards compatible with the existing codebase and should run normally without
+  modification if developers choose not to use the new feature. Moreover, if they opt
+  for the new feature, the API should minimise the amount of refactoring 
+  needed for an existing codebase. \label{itm:refactor}
+  \item \textbf{Single responsibility.} The new feature should be contained in 
+  module(s) isolated from existing Mnesia code, while respecting Mnesia's code structure.
+  This makes the implementation self-contained and easier to maintain. \label{itm:single resp}
+  \item \textbf{Extensibility.} Hypermnesia should be extensible to new 
+  implementations. This is beneficial since there are various possible \acrshortpl{crdt}, 
+  e.g.\ operation-based and state-based. They often achieve similar goals but rely 
+  on different assumptions. Hypermnesia should be extensible to new \acrshort{crdt} 
+  variants for different tradeoffs.
+  \label{itm:extensible}
+\end{enumerate}
+
+
+Based on the existing APIs provided by Mnesia (\cref{subsec:mnesia access contexts}), 
+one way to extend it with new APIs for eventual consistency would be to add a
+new access context called \mintinline{erlang}{async_ec} so that database operations
+performed within this context are eventually consistent. Using
+the same example, we can change~\cref{lst:dirty trans api} (the original
+\acrshort{api} for transactions and dirty operations) to~\cref{lst:mnesia ec activity} (the
+new \acrshort{ec} \acrshort{api}).
+We argue that this is a fairly natural extension to the existing Mnesia access contexts,
+and requires little refactoring of existing code (\verb|dirty| or \verb|transaction|
+changed to \verb|ec|). It does not break existing features either if no changes
+are made to the existing code, thus fulfilling~\cref{itm:refactor}.
+
+\begin{listing}[htp]
+  \begin{sublisting}{0.46\linewidth}
+    \begin{minted}[frame=lines]{erlang}
+      mnesia:activity(async_ec, fun () -> 
+        mnesia:write({tab_name, k, v}),
+        mnesia:read({tab_name, k})
+      end).
+    \end{minted}
+    \caption{\texttt{activity/2} with new access context \texttt{async\_ec}}
+  \end{sublisting}
+  \hfill
+  \begin{sublisting}{0.46\linewidth}
+    \begin{minted}[frame=lines]{erlang}
+      mnesia:async_ec( fun () -> 
+        mnesia:write({tab_name, k, v}),
+        mnesia:read({tab_name, k})
+      end).
+    \end{minted}
+    \caption{\texttt{async\_ec} with new function \texttt{async\_ec/1}}
+  \end{sublisting}
+  \caption{New \acrfull{ec} API based on existing Mnesia APIs, using the same
+  example as~\cref{lst:dirty trans api}.} 
+  \label{lst:mnesia ec activity}
+\end{listing}
+
+We also wish to allow programmers to declare which type of \acrshortpl{crdt} they
+want to use. This can be done while declaring the table type as \texttt{pawset}
+at creation time. Mnesia asks users to enter the type of each
+table at creation time (\cref{lst:mnesia create table}). The default values are 
+\texttt{set}, \texttt{bag}, etc. This can be extended
+to support pure \acrshort{awset} (\texttt{pawset}) and \acrshort{rwset} (\texttt{prwset}) 
+as well 
+(\cref{lst:hypermnesia create table}). Note that having multiple Set \acrshort{crdt}
+implementations allow developers to choose the most appropriate one for their
+applications, demonstrating the extensibility of Hypermnesia (\cref{itm:extensible}).
+
+\begin{listing}[htp]
+  \begin{sublisting}[t]{0.46\linewidth}
+    \begin{minted}[frame=lines]{erlang}
+      mnesia:create_table(project,
+                          [{type, set},
+                          {ram_copies, all_nodes()},
+                          {attributes, record_info(fields, student)}]).
+    \end{minted}
+    \caption{Creating a table of default type \texttt{set} and storing student 
+    record data~\cref{lst:student rec}.}
+    \label{lst:mnesia create table}
+  \end{sublisting}
+  \hfill
+  \begin{sublisting}[t]{0.46\linewidth}
+    \begin{minted}[frame=lines]{erlang}
+      mnesia:create_table(project,
+                          [{type, pawset},
+                          {ram_copies, all_nodes()},
+                          {attributes, record_info(fields, student)}]);
+    \end{minted}
+    \caption{Creating a table of type \texttt{pawset} (pure \acrlong{awset}) and 
+    storing student record data. A \texttt{prwset} (pure \acrlong{rwset}) 
+    can be used as well.}
+    \label{lst:hypermnesia create table}
+  \end{sublisting}
+  \caption{New \acrfull{ec} API based on existing Mnesia APIs.} 
+  \label{lst:mnesia ec create table}
+\end{listing}
+
+Finally, different \acrshort{crdt} logic is implemented inside separate modules,
+aiming to achieve the single responsibility requirement (\cref{itm:single resp}).
+The new \verb|mnesia_ec| module is built for handling data replication and
+interfacing with the underlying \acrshortpl{crdt}, \verb|mnesia_causal| module for
+causal delivery, and \verb|mnesia_pawset|/\verb|mnesia_prwset| module(s) for
+data storage and conflict resolution (\cref{fig:mnesia struct}).
+
+\subsection{Choosing a CRDT} \label{subsec:impl choose crdt}
+
+We talked about different kinds of \acrshortpl{crdt} in~\cref{sec:bg crdt}.
+One type of Set \acrshort{crdt} needs to be chosen for Hypermnesia's implementation. 
+We consider two main factors (Fac):
+
+\begin{enumerate} [label={Fac\arabic*.},ref={Fac\arabic*}]
+  \item How efficient is this \acrshort{crdt} in terms of space and time?
+  \item How easy does it fit into the existing Mnesia codebase
+  and how many breaking changes need to be made? \label{itm:code change}
+\end{enumerate}
+
+On the one hand, state-based \acrshortpl{crdt} (\cref{subsec:bg state-based crdt}) 
+have an important drawback in their communication
+overhead~\cite{almeida2018DeltaCRDT}. This might not be acceptable for data types 
+with large state such as sets. \acrshortpl{dcrdt} is a more suitable candidate for our 
+purpose but even with \acrshortpl{dcrdt}, a fair amount
+of data needs to be broadcast, especially as the number of operations increases
+(see \cref{appendix:state-based} for details). Moreover, it might be difficult to 
+examine the state before broadcasting, since Mnesia does not do this by 
+default (\cref{subsec:mnesia access contexts}).
+State-based \acrshortpl{crdt} do have the advantage of low demand 
+on the channel. Therefore reliable broadcasting in Mnesia would be sufficient.
+ 
+
+On the other hand, operation-based \acrshortpl{crdt} tend to require the channel
+to provide causal broadcast, which has to be implemented in Mnesia from scratch.
+Dynamic membership, i.e.\
+nodes leaving and joining the cluster, is also tricker with operation-based
+\acrshortpl{crdt} as buffering and replaying of operations are needed. Nevertheless,
+pure operation-based \acrshortpl{crdt} largely resemble Mnesia's anti-entropy strategy,
+with no examination of the current content and immediate synchronisation
+for each operation~\cite{mattsson2009impltxt}. 
+State-based \acrshortpl{crdt} are less suitable for these requirements~\cite{preguica2018CRDT}. 
+Therefore pure op-based \acrshortpl{crdt} better meets the second 
+requirement (\cref{itm:code change}).
+
+In terms of efficiency, it is challenging to characterise the performance metrics
+of each \acrshort{crdt} without practical benchmarking:
+\acrshortpl{dcrdt} uses periodic synchronisation of delta states, while
+pure op-based \acrshortpl{crdt} go through an extra causal broadcast layer.
+Moreover, \citet{almeida2018DeltaCRDT} and \citet{baquero2017PureOp}
+proposed optimisations for these \acrshortpl{crdt}. One could
+also argue that these two \acrshortpl{crdt} are fundamentally the same as they
+are both doing the necessary work for conflict resolution, but at different
+layers of the system.
+
+In conclusion, pure op-based \acrshortpl{crdt} is chosen for its operational
+similarity with Mnesia's dirty operations. We leave experimenting of
+\acrshortpl{dcrdt} as future work (\cref{sec:concl future}).
+\Cref{tab:crdt comparison} highlights the differences between these 
+two \acrshortpl{crdt}.
+
+\begin{table}[htp]
+  \centering
+  \begin{tabular}{p{0.25\textwidth}p{0.3\textwidth}p{0.3\textwidth}}
+    \toprule
+    &   State-based & Operation-based \\ \midrule
+    \textbf{Variant of interest} & Delta-state & Pure op-based \\ \midrule
+    \textbf{Understandability} & Complex & Medium \\ \midrule
+    \textbf{Efficiency} & Good & Good \\ \midrule
+    \textbf{Complexity} & Periodic anti-entropy different from Mnesia's protocol & Causal broadcast not provided by Mnesia \\ \midrule
+    \textbf{Advantage} & Little requirement on the channel & Similarity to current Mnesia's anti-entropy strategy \\
+    \bottomrule
+  \end{tabular}
+  \caption{Comparison of state and operation based Set \acrshortpl{crdt}.}
+  \label{tab:crdt comparison}
+
+\end{table}
