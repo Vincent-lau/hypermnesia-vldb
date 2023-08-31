@@ -5,8 +5,6 @@
 \section{System implementation} \label{sec:impl}
 
 
-\subsection{Implementation overview} \label{sec:impl overview}
-
 \Cref{fig:hypermnesia arch} shows an overview of Hypermnesia's architecture. 
 A client sends a request to one of the database nodes connected in the cluster, 
 and this request is then processed by the \verb|mnesia_ec| 
@@ -21,7 +19,7 @@ broadcast (\cref{sec:impl cbcast}). Each of these modules is explained in more
 detail in the following sections.
 
 
-\begin{figure*}
+\begin{figure*}[htp]
   \begin{tikzpicture}[
     replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
     minimum height=15, minimum width=20, align=center,fill=ACMOrange},
@@ -797,20 +795,4 @@ to only remove elements that causally precede it, as captured by~\cref{line:awse
 in~\cref{algo:pawset}. In~\cref{fig:hypermnesia transient failure},
 the deletion with timestamp \([2,0,0]\) removes the element (a,\([1,0,0]\))
 which is causally lower, but not (a,\([0,1,0]\)) which is causally concurrent.
-
-
-\subsection{Summary}
-
-This chapter covers the design of Hypermnesia (\cref{sec:impl design}) 
-in terms of its \acrshortpl{api} to minimise the amount of code refactoring 
-needed (\cref{subsec:impl api}). We also examined the suitability 
-of different \acrshortpl{crdt} and decided to use pure op-based \acrshortpl{crdt}
-primarily because of its similarity to Mnesia's communication 
-pattern (\cref{subsec:impl choose crdt}). A prototype implementation 
-is presented (\cref{sec:impl overview}), including
-a \acrlong{tcsb} layer by extending the basic causal broadcast with timestamp and
-causal stability information (\cref{subsec:impl tcsb}). Practical optimisations
-such as the use of \texttt{bag} data structures are also considered (\cref{sec:impl pawset}). 
-We also briefly talked about two patterns of network faults and how the \acrshort{awset}
-and buffering of operations can help us (\cref{sec:impl fault tolerance}).
 

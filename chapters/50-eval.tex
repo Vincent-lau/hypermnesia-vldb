@@ -617,22 +617,22 @@ the scope of this project. Nevertheless, we believe this evaluation is a first
 step towards making Hypermnesia more usable and production-ready.
 
 
-\subsection{Summary}
+% \subsection{Summary}
 
-In this chapter, we evaluated Hypermnesia against the research questions
-of this project (\cref{sec:intro motivation}). The results show that Hypermnesia can
-produce correct results in spite of network delays (\cref{sec:eval correctness}),
-and partitions (\cref{sec:eval fault tolerance}), thus demonstrating the possibility
-of \acrlong{ec} in Mnesia and its role in automatic conflict 
-resolution (\cref{itm:question ec possible,itm:question ec conflict}).
-Furthermore, benchmarking results show that \acrshort{ec} operations can achieve
-approximately \(10\)--\(20\)x better throughput and lower latency than transactions, 
-and its performance can get close to dirty operations (recall that dirty operations 
-are much faster than transactions in Mnesia from~\cref{subsec:mnesia access contexts}) 
-when increasing the scale of the experiment (\cref{sec:eval benchmarks}).
-This makes \acrshort{ec} operations competitive for real-world applications
-(\cref{itm:question ec overhead}).
-Finally, \cref{sec:eval api} evaluates the usability of the new 
-API (\cref{itm:question ec refactor}) and shows that
-Hypermnesia's API enables minimum code refactoring for adoption in real-world
-projects.
+% In this chapter, we evaluated Hypermnesia against the research questions
+% of this project (\cref{sec:intro motivation}). The results show that Hypermnesia can
+% produce correct results in spite of network delays (\cref{sec:eval correctness}),
+% and partitions (\cref{sec:eval fault tolerance}), thus demonstrating the possibility
+% of \acrlong{ec} in Mnesia and its role in automatic conflict 
+% resolution (\cref{itm:question ec possible,itm:question ec conflict}).
+% Furthermore, benchmarking results show that \acrshort{ec} operations can achieve
+% approximately \(10\)--\(20\)x better throughput and lower latency than transactions, 
+% and its performance can get close to dirty operations (recall that dirty operations 
+% are much faster than transactions in Mnesia from~\cref{subsec:mnesia access contexts}) 
+% when increasing the scale of the experiment (\cref{sec:eval benchmarks}).
+% This makes \acrshort{ec} operations competitive for real-world applications
+% (\cref{itm:question ec overhead}).
+% Finally, \cref{sec:eval api} evaluates the usability of the new 
+% API (\cref{itm:question ec refactor}) and shows that
+% Hypermnesia's API enables minimum code refactoring for adoption in real-world
+% projects.

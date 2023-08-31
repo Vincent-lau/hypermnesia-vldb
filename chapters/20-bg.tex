@@ -457,73 +457,62 @@ be commutative under the causal delivery order \(<_d\):
 \(f \parallel_d g \iff f\not <_d g \land g\not <_d f\). 
 
 For this reason, a causal delivery channel is often required for op-based
-\acrshortpl{crdt} to work. Given such a channel,  the following 
-property (\cref{prop:op crdt convergence}) holds:
+\acrshortpl{crdt} to work. Given such a channel,  op-based \acrshortpl{crdt}
+also gives us the convergence property.
 
-\begin{proposition}[\cite{shapiro2011CRDT}] \label{prop:op crdt convergence}
-  Any two replicas of an op-based \acrshort{crdt} eventually converge under reliable broadcast
-  channels that deliver operations in delivery order \(<_d\).
-\end{proposition}
 
 One advantage of op-based \acrshortpl{crdt} is their communication efficiency.
 Using a set as an example data structure, instead of sending the
 entire set with all its elements,
 op-based set can just send operations like \texttt{add} or \texttt{delete}.
-This could significantly reduce the communication cost, especially when the set is large.
+This could significantly reduce the communication cost, especially when the set 
+is large.
 
-Given the stronger assumption on the channel, designers of op-based \acrshortpl{crdt}
-only need to choose how they want to
-order concurrent operations, an example of a particular type (which is also
-the one implemented in Hypermnesia) of op-based \acrshortpl{crdt} is given below.
-
-\subsubsection{Pure op-based CRDTs}
-
-The definition of the original op-based \acrshortpl{crdt} makes the separation 
-between state-based and op-based \acrshortpl{crdt} less clear in that an op-based
-\acrshortpl{crdt} can often include state information while sending operations. 
-For example, before sending operation \texttt{add(1)} on a set, the state of the 
-set can be inspected and the entire set can be added as the ``operation''. It also has 
-a relatively high implementation complexity~\cite{bauwens2021Reactivity}. 
-To address this, pure op-based \acrshortpl{crdt} were 
-developed~\cite{baquero2017PureOp,baquero2014PureOp}, which forbids inspecting
-the state \(\sigma\) while generating the message \(m\).
-
-I now illustrate pure op-based \acrshortpl{crdt} with an example \acrfull{awset}.
-\Cref{lst:pure op-based awset} is the conceptual view of implementing it.
-Typically there are three operations on an op-based \acrshort{crdt}: a generator
-\verb|prepare|, which turns the operation \(o_i\) on the current state \(\sigma_i\) into a 
-message \(m_i\) that is sent via reliable causal broadcast; an effector 
-\verb|effect|, which receives the message \(m\) and applies it onto the current state \(\sigma_j\)
-and produces a new state \(\sigma'_j\); and \verb|eval|, which takes an operation,
-such as lookup an element in a set and the current state \(\sigma_i\), and returns
-the result of the operation.
-For pure op-based \acrshortpl{crdt}, data and timestamps need to be stored in 
-a \emph{\acrfull{polog}}~\cite{baquero2017PureOp,baquero2014PureOp},
-partially ordered by the timestamp attached to each operation. This aims to 
-identify causal relationships between different elements, which is important
-for the convergence property (\cref{prop:op crdt convergence}).
-
-\begin{listing}[htp]
-  \begin{align*}
-    \Sigma: T&\hookrightarrow O \\
-    \mathrm{prepare}_i(o, s) &= o \\
-    \mathrm{effect}_i(o, t, s) &= s \cup \{(t, o)\} \\
-    \mathrm{eval}_i(\mathrm{elems}, s) &= \{v \mid (t, [\mathrm{add}, v]\in s \land 
-    \not\exists (t', [\mathrm{rmv}, v]\in s\cdot t < t'))\}
-  \end{align*}
-  \caption{A pure op-based \acrshort{awset} implementation, adapted 
-  from~\cite{baquero2017PureOp}.}
-  \label{lst:pure op-based awset}
-\end{listing}
+The original definition of op-based \acrshortpl{crdt}~\cite{shapiro2011CRDT}
+gives designers the freedom to choose any operation they want to generate
+from the state. Pure op-based \acrshortpl{crdt}~\cite{baquero2017PureOp,baquero2014PureOp} 
+takes this to one extreme and disallows the operation to contain any information
+from the current state of the data type. This is beneficial since it now resembles
+the way Mnesia nodes communicate with each other, which we discuss more in
+\cref{subsec:design choose crdt}.
 
 
-The \acrshort{polog} (\(\Sigma\)) for the \acrshort{awset} is a partial function from 
-timestamps to operations (with appropriate payload).
-Note that the effector takes three arguments,
-the operation \(o\), timestamp \(t\) and state \(s\), and it simply unions
-the operation and timestamp with the current state (i.e.\ appending it to the log), 
-leaving the complexity
-to the lookup function. This is a fairly space-expensive operation, since all operations
-need to be stored in the log including deletions. Optimisations are discussed
-later in \cref{sec:impl pawset}.
+% I now illustrate pure op-based \acrshortpl{crdt} with an example \acrfull{awset}.
+% \Cref{lst:pure op-based awset} is the conceptual view of implementing it.
+% Typically there are three operations on an op-based \acrshort{crdt}: a generator
+% \verb|prepare|, which turns the operation \(o_i\) on the current state \(\sigma_i\) into a 
+% message \(m_i\) that is sent via reliable causal broadcast; an effector 
+% \verb|effect|, which receives the message \(m\) and applies it onto the current state \(\sigma_j\)
+% and produces a new state \(\sigma'_j\); and \verb|eval|, which takes an operation,
+% such as lookup an element in a set and the current state \(\sigma_i\), and returns
+% the result of the operation.
+% For pure op-based \acrshortpl{crdt}, data and timestamps need to be stored in 
+% a \emph{\acrfull{polog}}~\cite{baquero2017PureOp,baquero2014PureOp},
+% partially ordered by the timestamp attached to each operation. This aims to 
+% identify causal relationships between different elements, which is important
+% for the convergence property (\cref{prop:op crdt convergence}).
+
+% \begin{listing}[htp]
+%   \begin{align*}
+%     \Sigma: T&\hookrightarrow O \\
+%     \mathrm{prepare}_i(o, s) &= o \\
+%     \mathrm{effect}_i(o, t, s) &= s \cup \{(t, o)\} \\
+%     \mathrm{eval}_i(\mathrm{elems}, s) &= \{v \mid (t, [\mathrm{add}, v]\in s \land 
+%     \not\exists (t', [\mathrm{rmv}, v]\in s\cdot t < t'))\}
+%   \end{align*}
+%   \caption{A pure op-based \acrshort{awset} implementation, adapted 
+%   from~\cite{baquero2017PureOp}.}
+%   \label{lst:pure op-based awset}
+% \end{listing}
+
+
+% The \acrshort{polog} (\(\Sigma\)) for the \acrshort{awset} is a partial function from 
+% timestamps to operations (with appropriate payload).
+% Note that the effector takes three arguments,
+% the operation \(o\), timestamp \(t\) and state \(s\), and it simply unions
+% the operation and timestamp with the current state (i.e.\ appending it to the log), 
+% leaving the complexity
+% to the lookup function. This is a fairly space-expensive operation, since all operations
+% need to be stored in the log including deletions. Optimisations are discussed
+% later in \cref{sec:impl pawset}.
 
