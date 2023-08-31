@@ -14,17 +14,6 @@
 % although without care this can appear formulaic and tedious. Your
 % call.
 
-This project report presents \emph{Hypermnesia}, an extension to the
-Mnesia \acrfull{dbms}~\cite{ericssonab2023mnesiaguide}. 
-Hypermnesia provides \acrfull{ec} 
-guarantee on top of Mnesia's transactional semantics. 
-In this chapter, I first discuss the motivation for building 
-Hypermnesia (\cref{sec:intro motivation}), then list the challenges and contributions
-in building Hypermnesia (\cref{sec:intro challenges,sec:intro contributions}). 
-After that, an outline of the report structure is given (\cref{sec:intro outline}).
-
-
-\subsection{Motivation} \label{sec:intro motivation}
 
 Mnesia is an embedded distributed \acrfull{dbms} designed for industrial-grade
 communication systems written in Erlang~\cite{ericssonab2023mnesiaguide}. It is
@@ -146,17 +135,4 @@ implement and evaluate Hypermnesia:
   \end{enumerate*} 
 
 \end{itemize}
-
-
-\subsection{Outline} \label{sec:intro outline}
-
-The rest of the report is organised as follows: \Cref{sec:bg} introduces the
-reader to the background knowledge, including the architecture of Mnesia and
-different ways of achieving eventual consistency. \Cref{sec:related} describes
-recent research on eventually consistent databases and \acrshortpl{crdt}: a data
-structure for implementing eventually consistent systems. \Cref{sec:impl} goes 
-into detail about designing an API for Hypermnesia and implementing it with practical optimisations.
-\Cref{sec:eval} evaluates Hypermnesia in terms of its correctness,
-performance and usability. \Cref{sec:concl} concludes the
-report and outlines potential future work.
 

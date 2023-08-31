@@ -2,12 +2,15 @@
 
 In the experimental evaluation, we show that Hypermnesia achieves eventual consistency.
 We also evaluate the performance of Hypermnesia in terms of its throughput and latency,
-compared against the standard Mnesia, as well as PostgreSQL and MongoDB.
+compared against the standard Mnesia, as well as PostgreSQL\footnote{} and MongoDB\footnote{}.
+
 We start by introducing new tests to ensure
 the correctness of the system (\cref{sec:eval correctness}), and then outline
 the benchmarking approach (\cref{sec:eval benchmarks}), before performing 
 measurements on a cluster of distributed physical machines in terms of
 time (\cref{sec:eval benchmarks}) and space (\cref{sec:eval space}).
+We also include a comparison of Hypermnesia against other popular 
+databases (\cref{subsec:eval other db}).
 This is followed by an examination of the fault tolerance properties of Hypermnesia
 (\cref{sec:eval fault tolerance}).
 We conclude the evaluation with a discussion on the API usability of 
@@ -28,6 +31,15 @@ It runs the Ubuntu 22.04.2 LTS Operating System. The cluster consists
 of 10 machines, each has an Intel(R) Xeon(R) CPU with 6 cores and 64GiB memory.
 They all run the Ubuntu 20.04.4 LTS Operating System. More details on the test-bed
 setup can be found in~\cref{appendix:eval setup}.
+
+
+To evaluate Hypermnesia against MongoDB and PostgreSQL, we use Kubernetes to simplify
+the deployment process. For MongoDB, the MongoDB enterprise operator\footnote{} is used
+to setup a Replica Set of MongoDB instances. MongoDB's replication is asynchronous,
+similar to the \verb|async_ec| access context of Hypermnesia. PostgreSQL is deployed 
+with the Bitnami's \texttt{postgresql-ha} helm chart, which uses PostgreSQL's builtin
+streaming replication for duplicating data. This process is also asynchronous, which
+is desirable for our purposes.
 
 
 \subsection{Correctness} \label{sec:eval correctness}
@@ -68,7 +80,6 @@ log of the tests is included in~\cref{appendix:test output}.
 
 \subsection{Benchmarking} \label{sec:eval benchmarks}
 
-\subsection{Benchmark overview}
 
 The second question (\cref{itm:question ec overhead} in~\cref{sec:intro motivation}) 
 is concerned with the efficiency of the \acrlong{ec} \acrshort{api} in Hypermnesia. 
@@ -110,6 +121,17 @@ latency since it has the lowest
 operational complexity, while transactions to be the slowest
 due to its synchronisation overhead. \acrshort{ec} operations should stay
 between those two, and ideally as close to dirty operations as possible.
+
+Although Mnesia is a specialised embedded database, it is worthwhile trying to understand
+how it performs against other mainstream databases. However, due to Mnesia's specialised nature
+and complexity, it is challenging to compare it against other databases with a unified 
+suite. Although there are readily available database benchmark standards and libraries such
+as TPC~\cite{} and YCSB~\cite{}, extending these to support Mnesia either requires lots of
+engineering effort or would defeat the purpose of using an embedded database in the first place,
+because a new benchmark client for Mnesia makes it behave more like a standalone database rather
+than embedded one. Nevertheless, we still use YCSB as our benchmark library for PostgreSQL and
+MongoDB, and the builtin benchmark for Mnesia. To ensure fairness, we adjust the parameters 
+of the benchmark to minimise the discrepancy as much as possible.
 
 
 \subsection{Number of generators} \label{subsec:eval generator number}
@@ -317,6 +339,36 @@ the extra overhead of periodic cleaning of timestamps could also play a
 role (\cref{subsec:impl causal stability}). However, this overhead 
 is still acceptable as \acrshort{ec}
 operations still have about \(25\)x higher throughput than transactions.
+
+\subsection{Other databases} \label{subsec:eval other db}
+
+Hypermnesia is also compared against two other databases to give a rough idea of its
+relative throughput and latency, as discussed in~\cref{sec:eval benchmarks}. \Cref{fig:workload all}
+shows the results of this experiments. We observe that Hypermnesia's throughput greatly
+exceeds other two databases by more than ten times. Although we stress that (Hyper)mnesia
+is an embedded database and such has quite different use cases and tradeoffs from the
+other two.
+
+\begin{figure}[htp]
+  \centering
+  \begin{subfigure}[t]{0.95\columnwidth}
+    \centering
+    \includegraphics[width=\columnwidth]{figures/tp_workload_all.pdf}
+    \caption{Throughput}
+    \label{fig:tp workload all}
+  \end{subfigure}
+  
+  \begin{subfigure}[t]{0.95\columnwidth}
+    \centering
+    \includegraphics[width=\columnwidth]{figures/lat_workload_all.pdf}
+    \caption{Latency}
+    \label{fig:lat workload all}
+  \end{subfigure}
+  \caption{Throughput and latency of different workloads, compared across MongoDB,
+  PostgreSQL and Hypermnesia.}
+  \label{fig:workload all}
+\end{figure}
+
 
 \subsection{Space overhead} \label{sec:eval space}
 
