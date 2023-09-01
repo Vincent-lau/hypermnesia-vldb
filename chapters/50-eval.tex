@@ -164,14 +164,13 @@ it is scalable with respect to the number of clients (requests) it can handle.
 
 \begin{figure}[htp]
   \centering
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/tp_generators_caelum.pdf}
     \caption{Throughput}
     \label{fig:tp generators caelum}
   \end{subfigure}
-  
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/lat_generators_caelum.pdf}
     \caption{Latency}
@@ -200,14 +199,13 @@ experiences more overhead.
 
 \begin{figure}[htp]
   \centering
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/tp_nodes_fixgen_caelum.pdf}
     \caption{Throughput with a fixed number of generators.}
     \label{fig:tp nodes fixgen caelum}
   \end{subfigure}
-  
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/lat_nodes_fixgen_caelum.pdf}
     \caption{Latency with a fixed number of generators.}
@@ -215,14 +213,13 @@ experiences more overhead.
   \end{subfigure}
 
   \centering
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/tp_nodes_caelum.pdf}
     \caption{Throughput with varying number of generators.}
     \label{fig:tp nodes caelum}
   \end{subfigure}
-  
-  \begin{subfigure}[t]{0.95\columnwidth}
+    \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/lat_nodes_caelum.pdf}
     \caption{Latency with varying number of generators.}
@@ -272,14 +269,13 @@ go through the causal broadcast layer and the processing logic of an \acrshort{a
 
 \begin{figure}[htp]
   \centering
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/tp_rw_caelum.pdf}
     \caption{Throughput}
     \label{fig:tp workload caelum}
   \end{subfigure}
-  
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/lat_rw_caelum.pdf}
     \caption{Latency}
@@ -315,14 +311,13 @@ the latency of each operation, and exhibits a larger increase in latency.
 
 \begin{figure}[htp]
   \centering
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/tp_table_caelum.pdf}
     \caption{Throughput}
     \label{fig:tp table caelum}
   \end{subfigure}
-  
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/lat_table_caelum.pdf}
     \caption{Latency}
@@ -343,30 +338,40 @@ operations still have about \(25\)x higher throughput than transactions.
 \subsection{Other databases} \label{subsec:eval other db}
 
 Hypermnesia is also compared against two other databases to give a rough idea of its
-relative throughput and latency, as discussed in~\cref{sec:eval benchmarks}. \Cref{fig:workload all}
+relative throughput and latency, as discussed in~\cref{sec:eval benchmarks}. 
+\Cref{fig:tp workload all} and \cref{fig:lat workload all}
 shows the results of this experiments. We observe that Hypermnesia's throughput greatly
 exceeds other two databases by more than ten times. Although we stress that (Hyper)mnesia
 is an embedded database and such has quite different use cases and tradeoffs from the
 other two.
 
 \begin{figure}[htp]
-  \centering
-  \begin{subfigure}[t]{0.95\columnwidth}
     \centering
-    \includegraphics[width=\columnwidth]{figures/tp_workload_all.pdf}
+    \includegraphics[width=0.96\columnwidth]{figures/tp_workload_all.pdf}
     \caption{Throughput}
-    \label{fig:tp workload all}
-  \end{subfigure}
-  
-  \begin{subfigure}[t]{0.95\columnwidth}
-    \centering
-    \includegraphics[width=\columnwidth]{figures/lat_workload_all.pdf}
-    \caption{Latency}
-    \label{fig:lat workload all}
-  \end{subfigure}
-  \caption{Throughput and latency of different workloads, compared across MongoDB,
+  \caption{Throughput of different workloads, compared across MongoDB,
   PostgreSQL and Hypermnesia.}
-  \label{fig:workload all}
+  \label{fig:tp workload all}
+\end{figure}
+
+
+\begin{figure}[htp]
+  \centering
+  \begin{subfigure}[t]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\columnwidth]{figures/lat_workload_read_all.pdf}
+    \caption{Read latency}
+    \label{fig:tp workload read all}
+  \end{subfigure}
+  \begin{subfigure}[t]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\columnwidth]{figures/lat_workload_write_all.pdf}
+    \caption{Write latency}
+    \label{fig:lat workload write all}
+  \end{subfigure}
+  \caption{Latency of different workloads, compared across MongoDB,
+  PostgreSQL and Hypermnesia.}
+  \label{fig:lat workload all}
 \end{figure}
 
 
@@ -393,14 +398,13 @@ is able to reduce the overhead by up to \(30\%\).
 
 \begin{figure}[htp]
   \centering
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/space_overhead_populate.pdf}
     \caption{Space overhead after populating the table.}
     \label{fig:space overhead populate}
   \end{subfigure}
-  
-  \begin{subfigure}[t]{0.95\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/space_overhead_runtime.pdf}
     \caption{Space overhead after running the benchmark.}
@@ -470,14 +474,13 @@ the two-phase commit protocol requires a reply from \emph{all} participating nod
 
 \begin{figure}[htp]
   \centering
-  \begin{subfigure}[t]{\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/tp_time_single.pdf} 
     \caption{No partition.}
     \label{fig:tp time without partition}
   \end{subfigure}
-  
-  \begin{subfigure}[t]{\columnwidth}
+  \begin{subfigure}[t]{0.49\columnwidth}
     \centering
     \includegraphics[width=\columnwidth]{figures/tp_time_partition.pdf} 
     \caption{A partition of 10 seconds, dashed lines indicate the start and

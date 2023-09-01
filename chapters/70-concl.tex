@@ -6,17 +6,10 @@
 % You will generally want to draw some conclusions, and point to
 % potential future work.
 
-In this project, we looked at Hypermnesia, an extension to the Mnesia \acrshort{dbms}
-incorporating eventual consistency. We conclude
-this report by summarising the accomplishments of Hypermnesia, highlighting
-key contributions (\cref{sec:concl accomplishments}) and
-pointing out ways Hypermnesia can be improved in the future (\cref{sec:concl future}).
-
-
-\subsection{Accomplishments} \label{sec:concl accomplishments}
-
+With Hypermnesia, we presented an extension to the Mnesia \acrshort{dbms}
+incorporating eventual consistency. 
 Qualitatively speaking, Hypermnesia's API is designed to minimise the amount of 
-code refactoring (\cref{sec:impl design}) and fits well into the existing Mnesia 
+code refactoring (\cref{sec:design}) and fits well into the existing Mnesia 
 access contexts, making it easier to be adopted in existing open source codebases
 (\cref{sec:eval api}) such as RabbitMQ and 
 ejabberd~\cite{vmware2023rabbitmq,processone2023ejabberd}.
@@ -35,12 +28,8 @@ consistency without sacrificing much performance, taking advantage of the
 performant architecture of dirty operations.
 
 
-\subsection{Future work} \label{sec:concl future}
-
-Finally, I list some possible extensions to Hypermnesia:
-
-\begin{itemize}
-  \item At the moment \acrshort{ec} operations do not interact well with Mnesia's
+\paragraph{Future work}
+  At the moment \acrshort{ec} operations do not interact well with Mnesia's
   transactions and dirty operations, i.e.\ they cannot be used on the same table.
   As mentioned in~\cref{subsec:related mvcc}, it is possible to add support for
   transactions that execute and update queries on a
@@ -49,16 +38,12 @@ Finally, I list some possible extensions to Hypermnesia:
   purpose~\cite{preguica2014SwiftCloud,shapiro2018Antidote}.
   Now that Mnesia has built-in support for \acrshortpl{crdt} and \acrlong{ec},
   it could be further enhanced to support lightweight but highly available
-  transactions.
-  \item Hypermnesia currently works for in-memory tables only. Although in-memory 
+  transactions. 
+  Furthermore, Hypermnesia currently works for in-memory tables only. Although in-memory 
   caching tends to be the way Mnesia is used~\cite{mattsson1998mnesia},
   Hypermnesia could be extended to support disk tables in the future, or even 
   custom backends. Different data structures might open the door 
   for better space optimisation which is currently less feasible 
   with \texttt{ets} and \texttt{dets}.
-  \item Hypermnesia chooses to use pure op-based \acrshortpl{crdt} for its simplicity
-  and similarity to Mnesia's architecture. \acrshortpl{dcrdt} is another popular
-  choice among eventually consistent databases~\cite{klophaus2010Riak}, which might
-  be worthwhile experimenting with. 
-\end{itemize}
+
 

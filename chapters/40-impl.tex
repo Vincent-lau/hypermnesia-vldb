@@ -590,7 +590,7 @@ state which will be reported to the developer for manual resolution.
 \end{figure}
 
 \begin{figure}[htp]
-  \begin{subfigure}[t]{0.3\textwidth}
+  \begin{subfigure}[t]{0.9\columnwidth}
     \centering
     \begin{tikzpicture}[
       replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
@@ -610,13 +610,13 @@ state which will be reported to the developer for manual resolution.
     \caption{Initially every replica has an \texttt{a} in its set.}
   \end{subfigure}
 
-  \begin{subfigure}[t]{0.3\textwidth}
+  \begin{subfigure}[t]{0.9\columnwidth}
     \centering
     \begin{tikzpicture}[
       replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
       minimum height=15, minimum width=20, align=center,fill=ACMOrange},
     ]
-      \node[replica,right=4cm of s1-m1] (s2-m1) {A};
+      \node[replica] (s2-m1) {A};
       \node[replica,below left=1cm and 0.5cm of s2-m1] (s2-m2) {B}
         edge[bidir,dashed] (s2-m1);
       \node[replica,below right=1cm and 0.5cm of s2-m1] (s2-m3) {C}
@@ -629,14 +629,14 @@ state which will be reported to the developer for manual resolution.
 
       \node[left=1mm of s2-m1] (s2-o1) {add(z)\texttt{->}B};
       \node[right=1mm of s2-m1] (s2-o1) {add(z)\texttt{->}C};
-      \node[left=1mm of s2-m2] (s2-o1) {add(y)\texttt{->}A};
+      \node[below=1mm of s2-t2] (s2-o1) {add(y)\texttt{->}A};
 
     \end{tikzpicture}
     \caption{Hypermnesia buffers messages during the partition.}
     \label{subfig:hypermnesia comm failure b}
   \end{subfigure}
 
-  \begin{subfigure}[t]{0.3\textwidth}
+  \begin{subfigure}[t]{0.9\columnwidth}
     \centering
     \begin{tikzpicture}[
       replica/.style={rectangle,rounded corners, draw=black, inner sep=5pt,
@@ -706,8 +706,8 @@ states.
       commentl/.style={align=right},
       commentr/.style={commentl, align=left},]
       \node[] (n1) { Node A};
-      \node[right=2cm of n1] (n2) { Node B};
-      \node[right=2cm of n2] (n3) { Node C};
+      \node[right=1cm of n1] (n2) { Node B};
+      \node[right=1cm of n2] (n3) { Node C};
       
       \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-4cm]n2add-|n1) 
         coordinate (n1addn2) node[pos=.6, above, sloped] {add a};
@@ -746,8 +746,8 @@ states.
       commentl/.style={align=right},
       commentr/.style={commentl, align=left},]
       \node[] (n1) { Node A};
-      \node[right=2cm of n1] (n2) { Node B};
-      \node[right=2cm of n2] (n3) { Node C};
+      \node[right=1cm of n1] (n2) { Node B};
+      \node[right=1cm of n2] (n3) { Node C};
       
       \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-4cm]n2add-|n1) 
         coordinate (n1addn2) node[pos=.6, sloped, auto, swap] {(add a, \([0,1,0]\))};
