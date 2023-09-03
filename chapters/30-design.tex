@@ -137,8 +137,8 @@ have an important drawback in their communication
 overhead~\cite{almeida2018DeltaCRDT}. This might not be acceptable for data types 
 with large state such as sets. \acrshortpl{dcrdt} is a more suitable candidate for our 
 purpose but even with \acrshortpl{dcrdt}, a fair amount
-of data needs to be broadcast, especially as the number of operations increases
-(see \cref{appendix:state-based} for details). Moreover, it might be difficult to 
+of data needs to be broadcast, especially as the number of operations increases. 
+Moreover, it might be difficult to 
 examine the state before broadcasting, since Mnesia does not do this by 
 default (\cref{subsec:mnesia access contexts}).
 State-based \acrshortpl{crdt} do have the advantage of low demand 
@@ -169,7 +169,7 @@ layers of the system.
 
 In conclusion, pure op-based \acrshortpl{crdt} is chosen for its operational
 similarity with Mnesia's dirty operations. We leave experimenting of
-\acrshortpl{dcrdt} as future work (\cref{sec:concl future}).
+\acrshortpl{dcrdt} as future work.
 \Cref{tab:crdt comparison} highlights the differences between these 
 two \acrshortpl{crdt}.
 

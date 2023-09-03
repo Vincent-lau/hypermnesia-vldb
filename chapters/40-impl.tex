@@ -8,7 +8,7 @@
 \Cref{fig:hypermnesia arch} shows an overview of Hypermnesia's architecture. 
 A client sends a request to one of the database nodes connected in the cluster, 
 and this request is then processed by the \verb|mnesia_ec| 
-module (\cref{subsec:bg mnesia arch,subsec:impl api}), responsible
+module (\cref{subsec:bg mnesia arch,subsec:design api}), responsible
 for calling the underlying pure op-based Set \acrshort{crdt} implementation.
 In Hypermnesia, two op-based Set \acrshortpl{crdt}
 are implemented: add-wins set (\verb|mnesia_pawset|) and remove-wins set (\verb|mnesia_prwset|)
@@ -81,7 +81,7 @@ detail in the following sections.
 
     \begin{scope}[node distance=1cm]
       \node[right=of node b] (mod) {Modules};
-      \node[right=1.4cm of read,mod] (ec) {\texttt{mnesia\_ec} (\cref{subsec:bg mnesia arch,subsec:impl api})};
+      \node[right=1.4cm of read,mod] (ec) {\texttt{mnesia\_ec} (\cref{subsec:bg mnesia arch,subsec:design api})};
       \node[right=0.3cm of mnesia b,mod,yshift=-0.4cm] (pawset) 
         {\texttt{mnesia\_pawset} \texttt{mnesia\_prwset} (\cref{sec:impl pawset})};
       \node[right=1.4 cm of bcast2,mod] (causal) {\texttt{mnesia\_causal} (\cref{sec:impl cbcast})};
@@ -96,13 +96,8 @@ detail in the following sections.
 \subsection{Causal Broadcast} \label{sec:impl cbcast}
 
 Causal broadcast is a mature algorithm with standard implementation 
-strategies~\cite{schmuck1988broadcast,birman1991causal}. This section focuses on various
-modifications of the causal broadcast algorithm and pure op-based set 
-to the Erlang ecosystem.
-
-\subsection{Causal broadcast server}
-
-Causal broadcast is often treated as a middleware between the
+strategies~\cite{schmuck1988broadcast,birman1991causal}. 
+It is often treated as a middleware between the
 network and the application. It buffers messages until they are causally ready
 to be delivered to the application. The \mintinline{erlang}{gen_server} behaviour
 is a suitable abstraction, as it provides an interface from which
@@ -118,7 +113,7 @@ The \mintinline{erlang}{send_msg/1} function returns the current timestamp
 as a vector clock to be attached to the message.  The \mintinline{erlang}{rcv_msg/1}
 function takes a received message and returns a list of messages ready to be
 delivered to Mnesia for further processing, such as database writing.
-The \verb|mnesia_causal| server also keeps track of a list of buffered messages.
+The \mintinline{erlang}{mnesia_causal} server also keeps track of a list of buffered messages.
 Each time a message is received, it is added to the buffer, and the buffer is
 searched for deliverable messages.
 
@@ -422,10 +417,8 @@ idea of causal stability (\cref{lst:aw set causal redundancy}).
   \label{algo:pawset}
 \end{algorithm}
 
-Apart from the \acrlong{awset}, a \acrlong{rwset} (\cref{sec:impl overview}) 
-is also implemented, and the 
-algorithm is mostly similar to that of an \acrlong{awset}.
-This can be found in~\cref{appendix:rwset}. 
+Apart from the \acrlong{awset}, a \acrlong{rwset} (\cref{fig:hypermnesia arch}) 
+is also implemented, and the algorithm is mostly similar to that of an \acrlong{awset}.
 
 \subsection{Practical concerns} \label{subsec:impl practical}
 
@@ -666,7 +659,7 @@ state which will be reported to the developer for manual resolution.
 Hypermnesia resolves this issue by buffering messages during the partition, as
 shown in~\cref{fig:hypermnesia comm failure}. During the communication failure, 
 operations performed on replicas A and B are buffered until the partition heals. 
-By the property of op-based \acrshortpl{crdt} (\cref{prop:op crdt convergence}),
+By the property of op-based \acrshortpl{crdt} (\cref{subsec:bg op-based crdts}),
 replicas will converge after the buffered messages are delivered.
 In this simple case, it is sufficient to achieve consistency by a simple set 
 union. In a more complex case
@@ -789,7 +782,7 @@ operations need to commute.
 The exact semantics of whether addition or deletion wins depends on the actual
 application, and to achieve convergence, it is sufficient to
 define consistent semantics across replicas. Add-wins semantics is presented here
-but the remove-wins semantics is similar (\cref{appendix:rwset}). To achieve
+but the remove-wins semantics is similar. To achieve
 add-wins semantics with a pure op-based Set \acrshort{crdt}, we require deletions
 to only remove elements that causally precede it, as captured by~\cref{line:awset remove red}
 in~\cref{algo:pawset}. In~\cref{fig:hypermnesia transient failure},

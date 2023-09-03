@@ -67,9 +67,8 @@ more detail in~\cref{sec:bg crdt}.
 
 \subsection{Mnesia} \label{sec:bg mnesia}
 
-Mnesia is an embedded~\cite{raasveldt2019DuckDB},
-specialised distributed \acrshort{dbms} for Erlang/OTP 
-applications (\cref{subsec:bg mnesia design goal,subsec:bg mnesia arch}).
+Mnesia is an embedded \acrshort{dbms} for Erlang/OTP 
+applications~\cite{mattsson1998mnesia,mattsson1999mnesiainternal}.
 It is similar to relational databases where each table stores 
 tuples (\cref{subsec:bg mnesia data repr}), but also
 different since it uses Erlang as its query language instead of SQL\@.
@@ -78,17 +77,9 @@ discussed in more detail below.
 
 \subsection{Design goals} \label{subsec:bg mnesia design goal}
 
-The original design of Mnesia attempts to meet several requirements~\cite{ericssonab2023mnesiaguide}:
-
-\begin{enumerate}
-  \item Fast real-time key-value lookup
-  \item Complex non-real-time queries (mainly for operation and maintenance tasks)
-  \item Distributed data (due to the distributed nature of the applications)
-  \item High fault tolerance
-  \item Dynamic reconfiguration
-\end{enumerate}
-
-Based on these, Mnesia was built as part of the Erlang/OTP distribution.
+The original design of Mnesia attempts to provide a soft real-time key-value
+lookup store for Erlang/OTP applications with fault tolerance and distribution
+support~\cite{ericssonab2023mnesiaguide}.
 Erlang was originally designed for building fault-tolerant telecommunication systems,
 and Mnesia helps it to better achieve that goal by acting as an embedded database: 
 it is tightly coupled to Erlang, giving it two distinct features:
@@ -210,7 +201,7 @@ which means they form a cluster of fully connected nodes (or a mesh).
     tree. Most of the logic for replication is inside \texttt{mnesia\_tm} 
     (highlighted in blue). Modules added by Hypermnesia are highlighted in 
     green. More details on the new modules are
-    discussed in~\cref{sec:impl overview}. Diagram partly based 
+    discussed in~\cref{sec:impl}. Diagram partly based 
     on~\cite{mattsson1999mnesiainternal}.}
     \label{fig:mnesia struct}
 \end{figure*}
@@ -276,8 +267,8 @@ There are two almost equivalent\footnote{Subtle differences between these two \a
 can be found in the reference guide~\cite{ericssonab2023mnesiaref}} ways of 
 using this API, and \cref{lst:dirty trans api} provides an example of
 writing a tuple \verb|{k,v}| into the table \verb|tab_name| and then reading it out.
-I use the convention of \verb|function_name/arity| to represent Erlang functions
-in these code examples and the rest of this report.
+We use the convention of \verb|function_name/arity| to represent Erlang functions
+in these code examples and the rest of this paper.
 
 
 \begin{listing}[htp]

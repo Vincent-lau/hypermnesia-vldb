@@ -59,7 +59,7 @@ model for Mnesia since it often has better performance than transactions, while
 also maintaining consistency eventually. Modelling data this way can serve
 as a viable approach for achieving data consistency after a network partition.
 
-To this end, I propose the following research questions (RQs):
+To this end, we propose the following research questions (RQs):
 
 \begin{enumerate}[label={RQ\arabic*.},ref={RQ\arabic*}]
   \item \emph{Can we introduce a non-transactional consistency guarantee, for example,
@@ -83,7 +83,7 @@ To this end, I propose the following research questions (RQs):
 \end{enumerate}
 
 
-\subsection{Challenges} \label{sec:intro challenges}
+\subsubsection*{Challenges}
 
 There are several technical challenges (TCs) that need to be overcome to design,
 implement and evaluate Hypermnesia:
@@ -106,7 +106,7 @@ implement and evaluate Hypermnesia:
 \end{enumerate}
 
 
-\subsection{Contributions} \label{sec:intro contributions}
+\subsubsection*{Contributions} This paper makes the following contributions:
 
 \begin{itemize}
   \item \textbf{A new eventual consistency model for the Mnesia \acrshort{dbms}.}
@@ -130,6 +130,8 @@ implement and evaluate Hypermnesia:
     existing operations. Results show that Hypermnesia's \acrshort{ec} operations
     can often achieve \(10\)x higher throughput and lower latency than 
     Mnesia's transactions;
+    \item A comparison of Hypermnesia against other mainstream databases, Hypermnesia
+    outperforms them by more than 10 times in throughput;
     \item usability by analysing the amount of code refactoring needed to adopt
     the new API in real codebases.
   \end{enumerate*} 

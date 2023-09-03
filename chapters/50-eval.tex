@@ -29,8 +29,7 @@ The experiments are performed on:
 The single physical machine has an AMD 12-Core Processor and 16GiB DDR4 memory. 
 It runs the Ubuntu 22.04.2 LTS Operating System. The cluster consists
 of 10 machines, each has an Intel(R) Xeon(R) CPU with 6 cores and 64GiB memory.
-They all run the Ubuntu 20.04.4 LTS Operating System. More details on the test-bed
-setup can be found in~\cref{appendix:eval setup}.
+They all run the Ubuntu 20.04.4 LTS Operating System.
 
 
 To evaluate Hypermnesia against MongoDB and PostgreSQL, we use Kubernetes to simplify
@@ -45,7 +44,7 @@ is desirable for our purposes.
 \subsection{Correctness} \label{sec:eval correctness}
 
 The first question of whether eventual consistency is possible in 
-Mnesia (\cref{itm:question ec possible} in~\cref{sec:intro motivation}) is
+Mnesia (\cref{itm:question ec possible}) is
 concerned with the design and correctness of the implementation, therefore
 correctness testing is performed.
 The Mnesia source code has a regression test suite with about 5000 tests, 
@@ -81,7 +80,7 @@ log of the tests is included in~\cref{appendix:test output}.
 \subsection{Benchmarking} \label{sec:eval benchmarks}
 
 
-The second question (\cref{itm:question ec overhead} in~\cref{sec:intro motivation}) 
+The second question (\cref{itm:question ec overhead}) 
 is concerned with the efficiency of the \acrlong{ec} \acrshort{api} in Hypermnesia. 
 To answer this question, benchmarking is performed on the Hypermnesia codebase.
 The original Mnesia repository has a built-in benchmarking suite for transactions. 

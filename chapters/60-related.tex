@@ -19,16 +19,14 @@
 % much. The correct choice will depend on what you're writing up, and
 % your own personal preference.
 
-The field of database research is a dynamic and broad domain that encompasses a
-variety of topics. This chapter focuses on the architecture and design of eventually 
-consistent databases (\cref{sec:related db}).
-Similarly, for \acrshortpl{crdt} (\cref{sec:related crdt}), this chapter surveys 
-them in the context of how they impact the design and implementation of Hypermnesia.
+Scaling a single machine to multiple instances has been a central problem to many
+of the Computer Science and database research. With the increasing need of higher
+scalability, fault tolerance and lower latency~\cite{kleppmann2017DDIA}, many
+techniques and theories are developed to design systems that work consistently
+in a distributed environment.
 
 
-\subsection{Databases and eventual consistency} \label{sec:related db}
-
-\subsubsection{Mnesia and eventual consistency}
+\paragraph{Mnesia and eventual consistency}
 
 Mnesia's lack of automatic conflict resolution has been problematic for developers 
 using it~\cite{mineiro2008DukesofErl,wiger2010unsplitmail}. 
@@ -43,7 +41,7 @@ is a standalone database built on top of \texttt{ets}, while
 Hypermnesia aims to extend Mnesia to support automatic resolution natively.
 
 
-\subsubsection{Key-value stores}
+\paragraph{Key-value stores}
 
 Key-value stores like Redis\footnote{\url{https://redis.com}} serve as a caching 
 layer between servers and databases, offering an Active-Active architecture that allows
@@ -64,7 +62,7 @@ the constraints when developers opt for Mnesia as the choice of their Erlang app
 % experienced developers work with it lack of documentation
 % add ec so that developers will use it
 
-\subsubsection{Multi-version concurrency control} \label{subsec:related mvcc}
+\paragraph{Multi-version concurrency control} \label{subsec:related mvcc}
 
 SwiftCloud~\cite{preguica2014SwiftCloud} is a fault-tolerant geo-replicated 
 transactional system. It provides causally
@@ -80,10 +78,10 @@ allowing developers to choose between them.
 Mnesia does not support object versioning by default, so
 adding \acrshort{mvcc} requires extensive work. In this project, we focus
 on adding eventual consistency and leave the integration of \acrshort{mvcc} and 
-\acrshortpl{crdt} as future work (\cref{sec:concl future}).
+\acrshortpl{crdt} as future work.
 
 
-\subsubsection{Augmenting existing embedded databases}
+\paragraph{Augmenting existing embedded databases}
 
 SQLite\footnote{\url{https://sqlite.org/index.html}} is one of the most widely 
 used embedded SQL database engines in the world~\cite{hipp2019sqlite}. 
@@ -105,9 +103,8 @@ distributed database, hence they have different use cases.
 Moreover, to the best of our knowledge, there is no performance evaluation on 
 these extensions to SQLite yet.
 
-\subsection{CRDTs research} \label{sec:related crdt}
 
-\subsubsection{Systems using CRDTs} \label{subsec:related crdt system}
+\paragraph{Systems using CRDTs} \label{subsec:related crdt system}
 
 \acrshortpl{crdt} are often used in collaboration software such
 as shared text editors~\cite{weiss2010Logoot} to provide local-first 
@@ -122,7 +119,7 @@ Researchers have been investigating new areas where \acrshort{crdt} techniques
 can be applied. Hypermnesia does not aim to apply \acrshortpl{crdt} in a novel
 way but rather to experiment with their suitability in an embedded database like Mnesia.
 
-\subsubsection{Time and space improvements} \label{subsec:related crdt performance}
+\paragraph{Time and space improvements} \label{subsec:related crdt performance}
 
 \acrshortpl{crdt} are constantly invented and improved to reduce their resource 
 consumption.
@@ -138,7 +135,7 @@ adapt \acrshortpl{dcrdt} for more unstable networks.
 Furthermore, \citet{bauwens2019crdtmemory} show a more eager way to remove metadata
 using acknowledgements from replicas.
 
-One research question of this project is to understand the overhead of
+One research question of Hypermnesia is to understand the overhead of
 eventual consistency in Mnesia. The space and time optimisations proposed are 
 useful for improving Hypermnesia's efficiency,
 therefore they are investigated in detail, and some of their ideas are
