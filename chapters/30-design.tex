@@ -40,24 +40,24 @@ with the following design goals (DGs):
 Based on the existing APIs provided by Mnesia (\cref{subsec:mnesia access contexts}), 
 one way to extend it with new APIs for eventual consistency would be to add a
 new access context called \mintinline{erlang}{async_ec} so that database operations
-performed within this context are eventually consistent. Using
-the same example, we can change~\cref{lst:dirty trans api} (the original
-\acrshort{api} for transactions and dirty operations) to~\cref{lst:mnesia ec activity} (the
-new \acrshort{ec} \acrshort{api}).
-We argue that this is a fairly natural extension to the existing Mnesia access contexts,
-and requires little refactoring of existing code (\verb|dirty| or \verb|transaction|
-changed to \verb|ec|). It does not break existing features either if no changes
+performed within this context are eventually consistent. \Cref{lst:mnesia ec activity}
+shows a comparison between the existing Mnesia access context and the new 
+\acrshort{ec} \acrshort{api}.
+We argue that this is a fairly natural extension to the existing Mnesia access 
+contexts,
+and requires little refactoring of existing code (\verb|dirty| changed to \verb|ec|). 
+It does not break existing features either if no changes
 are made to the existing code, thus fulfilling~\cref{itm:refactor}.
 
 \begin{listing}[htp]
   \begin{sublisting}{0.48\columnwidth}
     \begin{minted}[frame=lines]{erlang}
-      mnesia:activity(async_ec, fun () -> 
+      mnesia:async_dirty(fun () -> 
         mnesia:write({tab_name, k, v}),
         mnesia:read({tab_name, k})
       end).
     \end{minted}
-    \caption{\texttt{activity/2} with new access context \texttt{async\_ec}}
+    \caption{Existing \texttt{async\_dirty/2} access context.}
   \end{sublisting}
   \hfill
   \begin{sublisting}{0.48\columnwidth}
@@ -69,8 +69,9 @@ are made to the existing code, thus fulfilling~\cref{itm:refactor}.
     \end{minted}
     \caption{\texttt{async\_ec} with new function \texttt{async\_ec/1}}
   \end{sublisting}
-  \caption{New \acrfull{ec} API based on existing Mnesia APIs, using the same
-  example as~\cref{lst:dirty trans api}.} 
+  \caption{Comparison of the existing access context and the new \acrfull{ec} API 
+  We use the convention of \texttt{function\_name/arity} to represent Erlang 
+  functions in these code examples and the rest of the paper.}
   \label{lst:mnesia ec activity}
 \end{listing}
 
