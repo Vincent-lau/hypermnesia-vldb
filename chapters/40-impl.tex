@@ -93,7 +93,7 @@ detail in the following sections.
 \end{figure*}
 
 
-\subsection{Causal Broadcast} \label{sec:impl cbcast}
+\subsection{Causal Broadcast and tagging} \label{subsec:impl cbcast}
 
 Causal broadcast is a mature algorithm with standard implementation 
 strategies~\cite{schmuck1988broadcast,birman1991causal}. 
@@ -105,81 +105,96 @@ developers can write custom implementations of request handlers to obtain a
 generic server (similar to interface in object-oriented 
 languages)~\cite{ericssonab2023otpdesign}.
 
-More concretely, we define a collection of public functions for the causal broadcast
-server, which can be called by \mintinline{erlang}{mnesia_ec} while sending
-and receiving messages. Two most basic ones are \mintinline{erlang}{send_msg/1}
-and \mintinline{erlang}{rcv_msg/1}, as shown in~\cref{lst:causal broadcast server}.
-The \mintinline{erlang}{send_msg/1} function returns the current timestamp
-as a vector clock to be attached to the message.  The \mintinline{erlang}{rcv_msg/1}
-function takes a received message and returns a list of messages ready to be
-delivered to Mnesia for further processing, such as database writing.
-The \mintinline{erlang}{mnesia_causal} server also keeps track of a list of buffered messages.
-Each time a message is received, it is added to the buffer, and the buffer is
-searched for deliverable messages.
-
-
-\begin{listing}[htp]
-  \centering
-  \begin{minted}[frame=lines]{erlang}
-    -record(state,
-        {send_seq :: integer(),
-         delivered :: vclock(),
-         buffer :: [msg()] }).
-
-    -spec send_msg() -> vclock().
-    -spec rcv_msg(msg()) -> [msg()].
-  \end{minted} 
-  \caption{\texttt{mnesia\_causal} server for causal broadcast.}
-  \label{lst:causal broadcast server}
-\end{listing}
-
-
-\subsection{Tagged causal stable broadcast} \label{subsec:impl tcsb}
-
-The algorithm discussed above is a standard causal broadcast 
-algorithm~\cite{schmuck1988broadcast,kleppmann2022dist-notes,birman1991causal}.
-It does not expose any ordering or timestamp information when delivering a message.
+This standard algorithm does not expose any ordering or timestamp information when 
+delivering a message.
 A Set \acrshort{crdt} often relies on unique identifiers to
 ensure commutativity of causally concurrent operations. \citet{baquero2017PureOp}
 observe that the timestamp information from the causal broadcast layer can act
 as a unique identifier for the \acrshort{crdt}, and thus
 propose exposing the ordering information from the causal broadcast layer to
 the application, i.e.\ the receive function would return a list of messages
-along with their timestamps (\cref{lst:tcsb}).
+along with their timestamps. This extension allows the
+layers above the causal broadcast to extract the timestamp information, and in
+the case of \acrshortpl{crdt}, use them to track history information.
 
-\begin{listing}[htp]
-  \centering
-  \begin{minted}[frame=lines]{erlang}
-    -spec send_msg() -> timestamp().
-    -spec rcv_msg(msg()) -> [{msg(), timestamp()}].
-  \end{minted} 
-  \caption{\texttt{mnesia\_causal} server interface for \acrlong{tcsb}.}
-  \label{lst:tcsb}
-\end{listing}
+% The extended \acrfull{tcsb} protocol works like this: when a message is ready 
+% to be sent, the function \verb|send_msg/0| is called to obtain the timestamp which
+% is attached to the message. 
+% And when a message is received, the \verb|rcv_msg/1| is called to buffer the message
+% and find all messages ready to be delivered. A message is ready when
+% the following two conditions hold~\cite{schmuck1988broadcast,
+% kleppmann2022dist-notes,birman1991causal}:
 
-The extended \acrfull{tcsb} protocol works like this: when a message is ready 
-to be sent, the function \verb|send_msg/0| is called to obtain the timestamp which
-is attached to the message. 
-And when a message is received, the \verb|rcv_msg/1| is called to buffer the message
-and find all messages ready to be delivered. A message is ready when
-the following two conditions hold~\cite{schmuck1988broadcast,
-kleppmann2022dist-notes,birman1991causal}:
+% \begin{enumerate}
+%   \item The sender entry in the receiver's delivered map, which keeps track of how many
+%   messages are delivered for each sender, is exactly one less than the entry
+%   in the received message's timestamp;
+%   \item The other entries in the received message's timestamp are all less than
+%   or equal to the corresponding entries in the receiver's delivered map.
+% \end{enumerate}
 
-\begin{enumerate}
-  \item The sender entry in the receiver's delivered map, which keeps track of how many
-  messages are delivered for each sender, is exactly one less than the entry
-  in the received message's timestamp;
-  \item The other entries in the received message's timestamp are all less than
-  or equal to the corresponding entries in the receiver's delivered map.
-\end{enumerate}
+% The first condition ensures that all causally preceding messages from the sender
+% have been delivered, and the second condition prevents us from delivering 
+% messages that causally depend on messages from other nodes. Note that the sender 
+% of the message can always deliver messages from itself immediately, a desirable 
+% property for
+% availability during partitions, and causal consistency is the strongest consistency
+% model that provides such always-available property~\cite{mahajan2012cac}.
 
-The first condition ensures that all causally preceding messages from the sender
-have been delivered, and the second condition prevents us from delivering 
-messages that causally depend on messages from other nodes. Note that the sender 
-of the message can always deliver messages from itself immediately, a desirable 
-property for
-availability during partitions, and causal consistency is the strongest consistency
-model that provides such always-available property~\cite{mahajan2012cac}.
+
+% More concretely, we define a collection of public functions for the causal broadcast
+% server, which can be called by \mintinline{erlang}{mnesia_ec} while sending
+% and receiving messages. Two most basic ones are \mintinline{erlang}{send_msg/1}
+% and \mintinline{erlang}{rcv_msg/1}, as shown in~\cref{lst:causal broadcast server}.
+% The \mintinline{erlang}{send_msg/1} function returns the current timestamp
+% as a vector clock to be attached to the message.  The \mintinline{erlang}{rcv_msg/1}
+% function takes a received message and returns a list of messages ready to be
+% delivered to Mnesia for further processing, such as database writing.
+% The \mintinline{erlang}{mnesia_causal} server also keeps track of a list of buffered messages.
+% Each time a message is received, it is added to the buffer, and the buffer is
+% searched for deliverable messages.
+
+
+% \begin{listing}[htp]
+%   \centering
+%   \begin{minted}[frame=lines]{erlang}
+%     -record(state,
+%         {send_seq :: integer(),
+%          delivered :: vclock(),
+%          buffer :: [msg()] }).
+
+%     -spec send_msg() -> vclock().
+%     -spec rcv_msg(msg()) -> [msg()].
+%   \end{minted} 
+%   \caption{\texttt{mnesia\_causal} server for causal broadcast.}
+%   \label{lst:causal broadcast server}
+% \end{listing}
+
+
+% \subsection{Tagged causal stable broadcast} \label{subsec:impl tcsb}
+
+% The algorithm discussed above is a standard causal broadcast 
+% algorithm~\cite{schmuck1988broadcast,kleppmann2022dist-notes,birman1991causal}.
+% It does not expose any ordering or timestamp information when delivering a message.
+% A Set \acrshort{crdt} often relies on unique identifiers to
+% ensure commutativity of causally concurrent operations. \citet{baquero2017PureOp}
+% observe that the timestamp information from the causal broadcast layer can act
+% as a unique identifier for the \acrshort{crdt}, and thus
+% propose exposing the ordering information from the causal broadcast layer to
+% the application, i.e.\ the receive function would return a list of messages
+% along with their timestamps (\cref{lst:tcsb}).
+
+% \begin{listing}[htp]
+%   \centering
+%   \begin{minted}[frame=lines]{erlang}
+%     -spec send_msg() -> timestamp().
+%     -spec rcv_msg(msg()) -> [{msg(), timestamp()}].
+%   \end{minted} 
+%   \caption{\texttt{mnesia\_causal} server interface for \acrlong{tcsb}.}
+%   \label{lst:tcsb}
+% \end{listing}
+
+
 
 \subsection{Pure operation-based Set CRDT optimisations} \label{subsec:impl pawset opt}
 
@@ -215,12 +230,11 @@ is done periodically.
 \subsection{Broadcast and CRDT algorithms} \label{subsec:impl pawset algorithm}
 
 \Cref{algo:tcsb} shows the broadcast algorithm obtained by putting these optimisations
-together (\crefrange{subsec:impl tcsb}{subsec:impl pawset opt}). 
+together (\crefrange{subsec:impl cbcast}{subsec:impl pawset opt}). 
 When broadcasting a message (\crefrange{line:broadcast start}{line:broadcast end}),
 the appropriate timestamp and sender id are attached to the message, which is then
 received and buffered (\crefrange{line:receive start}{line:receive buffer end}). The
-receiver searches for messages that are causally ready to be delivered using
-the condition in~\cref{subsec:impl tcsb} (\crefrange{line:receive search start}{line:receive search end}).
+receiver searches for messages that are causally ready to be delivered (\crefrange{line:receive search start}{line:receive search end}).
 The causal broadcast server also provides a function to check for the stability of a 
 timestamp (\crefrange{line:stable start}{line:stable end}).
 This algorithm combines the standard causal broadcast
@@ -670,7 +684,7 @@ states.
       \node[right=1cm of n1] (n2) { Node B};
       \node[right=1cm of n2] (n3) { Node C};
       
-      \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-4cm]n2add-|n1) 
+      \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-3cm]n2add-|n1) 
         coordinate (n1addn2) node[pos=.6, above, sloped] {add a};
       \draw[post] (n2add) -- ([yshift=-1cm]n2add-|n3) 
         coordinate (n3addn2) node[pos=.3, above, sloped] {\textcolor{ACMPurple}{add a}};
@@ -679,9 +693,9 @@ states.
       \draw[post] ([yshift=-1.3cm]n1add) coordinate (n1rmv) -- ([yshift=-2cm]n1rmv-|n3)
         coordinate (n3rmvn1) node[pos=.6, above, sloped] {\textcolor{ACMPurple}{delete a}};
       
-      \draw[timeline] (n1) -- ($ (n1addn2) + (0, -1cm) $);
-      \draw[timeline] (n2) -- ($ (n2|-n1addn2) + (0, -1cm) $);
-      \draw[timeline] (n3) -- ($ (n3|-n1addn2) + (0,-1cm) $);
+      \draw[timeline] (n1) -- ($ (n1addn2) + (0, -0.5cm) $);
+      \draw[timeline] (n2) -- ($ (n2|-n1addn2) + (0, -0.5cm) $);
+      \draw[timeline] (n3) -- ($ (n3|-n1addn2) + (0,-0.5cm) $);
       
       \node[left=2mm of n1add, commentl] {add a};
       \node[below left=0.4cm and 2mm of n1add, commentl] {\{a\}};
@@ -704,13 +718,13 @@ states.
     \centering
     \begin{tikzpicture}[
       timeline/.style={semithick,dotted},
-      commentl/.style={align=right},
+      commentl/.style={align=right, text width=2cm},
       commentr/.style={commentl, align=left},]
       \node[] (n1) { Node A};
       \node[right=1cm of n1] (n2) { Node B};
       \node[right=1cm of n2] (n3) { Node C};
       
-      \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-4cm]n2add-|n1) 
+      \draw[post] ([yshift=-1cm]n2.south) coordinate (n2add) -- ([yshift=-3cm]n2add-|n1) 
         coordinate (n1addn2) node[pos=.6, sloped, auto, swap] {(add a, \([0,1,0]\))};
       \draw[post] (n2add) -- ([yshift=-1cm]n2add-|n3) 
         coordinate (n3addn2) node[pos=.6, above, sloped] 
@@ -721,9 +735,9 @@ states.
         coordinate (n3rmvn1) node[pos=.7, above, sloped] 
         {\textcolor{ACMPurple}{(delete a, \([2,0,0]\))}};
       
-      \draw[timeline] (n1) -- ($ (n1addn2) + (0, -1cm) $);
-      \draw[timeline] (n2) -- ($ (n2|-n1addn2) + (0, -1cm) $);
-      \draw[timeline] (n3) -- ($ (n3|-n1addn2) + (0,-1cm) $);
+      \draw[timeline] (n1) -- ($ (n1addn2) + (0, -0.5cm) $);
+      \draw[timeline] (n2) -- ($ (n2|-n1addn2) + (0, -0.5cm) $);
+      \draw[timeline] (n3) -- ($ (n3|-n1addn2) + (0,-0.5cm) $);
       
       \node[left=2mm of n1add, commentl] {add(a)};
       \node[below left=0.4cm and 2mm of n1add, commentl] {\{(a,\([1,0,0]\))\}};
