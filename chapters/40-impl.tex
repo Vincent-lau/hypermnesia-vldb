@@ -181,73 +181,41 @@ property for
 availability during partitions, and causal consistency is the strongest consistency
 model that provides such always-available property~\cite{mahajan2012cac}.
 
-\subsection{Pure operation-based Set CRDT} \label{sec:impl pawset}
+\subsection{Pure operation-based Set CRDT optimisations} \label{subsec:impl pawset opt}
 
 We have discussed the idea of a pure op-based set (\cref{subsec:bg op-based crdts}). 
-This section builds on top of the basic
-ideas of op-based Set \acrshort{crdt} and highlights 
-a few optimisations exploiting the causal broadcast 
-layer (\crefrange{subsec:impl causal redundancy}{subsec:impl pawset algorithm}).
-More subtle implementation challenges in interactions
-between Mnesia and the pure op-based set \acrshort{crdt} are also 
-discussed (\cref{subsec:impl practical}).
-
-\subsection{Causal Redundancy} \label{subsec:impl causal redundancy}
+This section builds on top of the basic ideas of op-based Set \acrshort{crdt} and highlights 
+a few optimisations exploiting the causal broadcast layer.
+% along with their
+% implementations ({subsec:impl pawset algorithm}).
+% More subtle implementation challenges in interactions
+% between Mnesia and the pure op-based set \acrshort{crdt} are also 
+% discussed (\cref{subsec:impl practical}).
 
 \emph{Causal redundancy} is proposed by~\citet{baquero2017PureOp} for elements in
 the \acrshort{polog} that can be removed without affecting the output of
-queries. We define the
-redundancy relation in~\cref{lst:aw set causal redundancy}. The first rule
-says that a clear or remove operation is redundant in all cases. The second rule
-makes causally older additions of the same elements redundant. The third rule says every
-addition of an element present in the \acrshort{polog} is in the set. Redundant
-elements can be safely removed from the \acrshort{polog}, which helps reduce the
-storage cost.
+queries. The precise definition can be found in~\cite{baquero2017PureOp,baquero2014PureOp}. 
+In short, this allows one to remove operations made redundant by later ones. For
+example, an add operation would become redundant after a causally succeeding remove 
+is received on the same element.
 
-\begin{listing}[htp]
-  \centering
-  \begin{align*}
-    (t,o)\ R\ s &\iff o[0] = \mathrm{clear} \lor \mathrm{rmv}\\
-    (t,o)\ R\_\ (t',o') &\iff t<t' \land (o'[0]=\mathrm{clear}\lor o[1]=o'[1]) \\
-    \mathrm{eval}_i(\mathrm{elems},s) &= \{v\ \mid\ (\_,[\mathrm{add},v])\in s\}
-  \end{align*} 
-  \caption{The redundancy relation \(R\) for an \acrshort{awset}. \(o[0]\) is the
-  operation, while \(o[1]\) is the key. Taken from~\cite{baquero2017PureOp}.} 
-  \label{lst:aw set causal redundancy}
-\end{listing}
-
-
-\subsection{Causal stability}  \label{subsec:impl causal stability}
-
-The number of timestamps associated with each element grows as elements are added
-to the set. Moreover, each of them is proportional to the number of nodes in the 
-cluster. \citet{baquero2014PureOp} suggest removing the timestamps that are
-\emph{causally stable}~\cite{shapiro2011CRDT,baquero2017PureOp}:
-
-\begin{definition}[Causal Stability~\cite{baquero2017PureOp,baquero2014PureOp}]
-  A timestamp \(\tau\) and a corresponding message, is causally stable at node 
-  \(i\) when all messages subsequently delivered at \(i\) will have timestamp 
-  \(t>\tau\).
-  Or equivalently:
-
-  \[
-    \mathrm{tcstable}_i(\tau)\ \mathbf{if}\ \forall j\in I\setminus \{i\}. \exists
-    t\in \mathrm{deliv}_i()\cdot\mathrm{src}(t) = j \land \tau < t.
-  \]
-\end{definition}
-
-Once a timestamp is stable, it can be removed. This is safe since there will be no more
+In addition to redundant elements, we could also remove redundant timestamps 
+using the \emph{Causal stability} formulation~\citet{baquero2017PureOp}.
+Causally stable elements are those whose timestamps are guaranteed to be smaller
+than any future timestamps, and hence can be removed.
+This is safe since there will be no more
 concurrent operations delivered in the future and the timestamp metadata is
 used to ensure commutativity for concurrent operations and is therefore no longer
 needed, reducing the storage cost of the \acrshort{polog}.
 
-The actual implementation in Hypermnesia is done by asking the 
-pure \acrshort{awset} periodically scanning elements and removing causally stable timestamps.
+Both causal redundancy and stability are implemented in Hypermnesia, where redundancy
+check is done when adding operation to the \acrshort{polog}, while stability check 
+is done periodically.
 
 \subsection{Broadcast and CRDT algorithms} \label{subsec:impl pawset algorithm}
 
 \Cref{algo:tcsb} shows the broadcast algorithm obtained by putting these optimisations
-together (\crefrange{subsec:impl tcsb}{subsec:impl causal stability}). 
+together (\crefrange{subsec:impl tcsb}{subsec:impl pawset opt}). 
 When broadcasting a message (\crefrange{line:broadcast start}{line:broadcast end}),
 the appropriate timestamp and sender id are attached to the message, which is then
 received and buffered (\crefrange{line:receive start}{line:receive buffer end}). The
