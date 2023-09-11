@@ -1,15 +1,10 @@
 %TC:ignore
 \begin{abstract}
     
-Mnesia is a soft real-time embedded \acrlong{dbms} written for 
-Erlang, a programming language that powers the infrastructures of various organisations 
-like Cisco, Ericsson and the NHS. Due to Mnesia's tight integration with 
-Erlang, it is also impactful in open source projects such as RabbitMQ and ejabberd. 
-
-However, the development of Mnesia has remained stagnant for years, resulting in the 
-lack of features such as automatic conflict resolution: Mnesia leaves the handling 
-of conflicts after network partitions entirely to the developer. 
-Moreover, as a distributed database, Mnesia only provides two 
+Mnesia is a soft real-time embedded \acrlong{dbms} written for Erlang.
+Despite its usage in heavy-duty systems such as WhatsApp and RabbitMQ,
+Mnesia lacks important features of a distributed database such as automatic 
+conflict resolution.  Moreover, Mnesia only provides two 
 extreme forms of consistency guarantee: transactions and weak consistency. 
 Existing solutions to this problem are either external libraries or commercial
 standalone products, none of which is integrated into Mnesia natively.
@@ -22,14 +17,12 @@ introduces an intermediate consistency guarantee between transactions and weak
 consistency, offering more choices to developers; second, this implementation 
 of \acrshort{ec} 
 with \acrfullpl{crdt} enables automatic conflict resolution after a network partition.
-
 We have implemented \acrshort{ec} as an extension to Mnesia named \emph{Hypermnesia}
 and evaluated its correctness, efficiency and usability. 
 Evaluation results show that Hypermnesia's \acrshort{ec} operations can produce
 consistent results in the presence of partitions and perform more than
 \(10\) times faster than Mnesia's default transactions. Moreover, Hypermnesia's 
-API enables minimum code refactoring for adoption in real-world systems. We hope
-Hypermnesia can be integrated into Mnesia and used by Erlang developers in the future.
+API enables minimum code refactoring for adoption in real-world systems. 
 
 \end{abstract}
 %TC:endignore

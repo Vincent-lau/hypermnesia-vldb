@@ -71,10 +71,10 @@ To this end, we propose the following research questions (RQs):
   Erlang gives it outstanding performance compared to other standalone databases.
   Therefore, it is important to evaluate the overhead of the new operations to
   ensure they are still competitive. \label{itm:question ec overhead}
-  \item \emph{Can eventual consistency help us achieve automatic conflict resolution
-  after a partition in Mnesia?} The fault tolerance model of 
-  Mnesia (\cref{sec:impl fault tolerance}) may present extra challenges in this 
-  otherwise straightforward extension. \label{itm:question ec conflict}
+  % \item \emph{Can eventual consistency help us achieve automatic conflict resolution
+  % after a partition in Mnesia?} The fault tolerance model of 
+  % Mnesia (\cref{sec:impl fault tolerance}) may present extra challenges in this 
+  % otherwise straightforward extension. \label{itm:question ec conflict}
   \item \emph{How much code refactoring is needed for the consistency guarantee to
   function?} Mnesia is used in many large-scale (legacy) codebases, which might
   be too expensive to do refactoring. Therefore it is important to understand 
@@ -83,30 +83,30 @@ To this end, we propose the following research questions (RQs):
 \end{enumerate}
 
 
-\subsubsection*{Challenges}
+% \subsubsection*{Challenges}
 
-There are several technical challenges (TCs) that need to be overcome to design,
-implement and evaluate Hypermnesia:
+% There are several technical challenges (TCs) that need to be overcome to design,
+% implement and evaluate Hypermnesia:
 
-\begin{enumerate}[label={TC\arabic*.}, ref={TC\arabic*}]
-  \item Mnesia is a rather old database system that has not received much attention for
-  years. This means the codebase contains legacy code and is not well documented.
-  \label{itm:intro mnesia old}
-  \item The previous point implies that there are potentially legacy projects
-  using Mnesia. The new feature, therefore, needs to be backwards compatible and 
-  ideally easy to be adopted by developers.
-  \item Another consequence of~\cref{itm:intro mnesia old} is that its test
-  suite does not include network partition tests, which are essential in testing
-  the correctness of eventual consistency. Moreover, its benchmark suite is only
-  written for transactions. Both of these need to be extended to evaluate Hypermnesia.
-  \item There are multiple ways to achieve eventual consistency. Therefore an
-  informed choice needs to be made based on Mnesia's existing architecture. A survey 
-  of existing methods and a study of the
-  relatively undocumented architecture of Mnesia is essential.
-\end{enumerate}
+% \begin{enumerate}[label={TC\arabic*.}, ref={TC\arabic*}]
+%   \item Mnesia is a rather old database system that has not received much attention for
+%   years. This means the codebase contains legacy code and is not well documented.
+%   \label{itm:intro mnesia old}
+%   \item The previous point implies that there are potentially legacy projects
+%   using Mnesia. The new feature, therefore, needs to be backwards compatible and 
+%   ideally easy to be adopted by developers.
+%   \item Another consequence of~\cref{itm:intro mnesia old} is that its test
+%   suite does not include network partition tests, which are essential in testing
+%   the correctness of eventual consistency. Moreover, its benchmark suite is only
+%   written for transactions. Both of these need to be extended to evaluate Hypermnesia.
+%   \item There are multiple ways to achieve eventual consistency. Therefore an
+%   informed choice needs to be made based on Mnesia's existing architecture. A survey 
+%   of existing methods and a study of the
+%   relatively undocumented architecture of Mnesia is essential.
+% \end{enumerate}
 
 
-\subsubsection*{Contributions} This paper makes the following contributions:
+This paper makes the following contributions:
 
 \begin{itemize}
   \item \textbf{A new eventual consistency model for the Mnesia \acrshort{dbms}.}
