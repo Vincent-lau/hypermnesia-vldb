@@ -505,104 +505,11 @@ concerning refactoring. First, a summary of the code changes is given for Hyperm
 followed by experimental modifications of real-world applications to demonstrate 
 Hypermnesia's usability.
 
-\Cref{lst:ec api comparison} shows the code changes needed from transactions/dirty
-operations (first two columns) to \acrshort{ec} operations (last column).
-Note that refactoring is often just one line of change. Another change 
-is the \texttt{type} option while creating
-a Mnesia table, as shown in~\cref{lst:hypermnesia type decl}. And that is all
-the change needed to use the new API\@. 
-
-\begin{listing}[htp]
-  \begin{sublisting}[t]{0.48\columnwidth}
-    \begin{minted}[frame=lines]{erlang}
-      mnesia:activity(transaction, 
-      fun () -> 
-        mnesia:write(tab, tup),
-        mnesia:read(tab, key)
-      end).
-    \end{minted}
-    \caption{transactions with \texttt{activity/2}.}
-  \end{sublisting}
-  \begin{sublisting}[t]{0.48\columnwidth}
-    \begin{minted}[frame=lines]{erlang}
-      mnesia:activity(async_dirty, 
-      fun () -> 
-        mnesia:write(tab,tup),
-        mnesia:read(tab,key)
-      end).
-    \end{minted}
-    \caption{dirty with \texttt{activity/2}.}
-  \end{sublisting}
-  
-  \begin{sublisting}[t]{\columnwidth}
-    \begin{minted}[frame=lines]{erlang}
-      mnesia:activity(async_ec, 
-      fun () -> 
-        mnesia:write(tab,tup),
-        mnesia:read(tab,key)
-      end).
-    \end{minted}
-    \caption{\acrshort{ec} operations with \texttt{activity/2}}
-  \end{sublisting}
-  \begin{sublisting}[t]{0.48\columnwidth}
-    \begin{minted}[frame=lines]{erlang}
-      mnesia:transaction(
-      fun () -> 
-        mnesia:write(tab,tup),
-        mnesia:read(tab,key)
-      end).
-    \end{minted}
-    \caption{transactions with \texttt{transaction/1}}
-  \end{sublisting}
-  \begin{sublisting}[t]{0.48\columnwidth}
-    \begin{minted}[frame=lines]{erlang}
-      mnesia:async_dirty(
-      fun () -> 
-        mnesia:write(tab,tup),
-        mnesia:read(tab,key)
-      end).
-    \end{minted}
-  \caption{dirty with \texttt{async\_dirty/1}}
-  \end{sublisting}
-  
-  \begin{sublisting}[t]{\columnwidth}
-      \begin{minted}[frame=lines]{erlang}
-        mnesia:async_ec(
-        fun () -> 
-          mnesia:write(tab,tup),
-          mnesia:read(tab,key)
-        end).
-      \end{minted}
-    \caption{\acrshort{ec} operations with \texttt{async\_ec/1}}
-  \end{sublisting}
-  \caption{Changing from transaction or dirty operations to \acrshort{ec} operations.}
-  \label{lst:ec api comparison}
-\end{listing}
-
-
-\begin{listing}[htp]
-  \centering 
-  \begin{sublisting}[t]{\columnwidth}
-    \centering
-    \begin{minted}[frame=lines]{erlang}
-      ejabberd_mnesia:create(?MODULE, oauth_client, [{disc_copies, [node()]},
-       {attributes, record_info(fields, oauth_client)}, {type, set}]).
-    \end{minted}
-    \caption{Original code creating a Mnesia table, using a set data structure.}
-  \end{sublisting}
-  
-  \begin{sublisting}[t]{\columnwidth}
-    \centering
-    \begin{minted}[frame=lines]{erlang}
-      ejabberd_mnesia:create(?MODULE, oauth_client, [{disc_copies, [node()]},
-       {attributes, record_info(fields, oauth_client)}, {type, pawset}]).
-    \end{minted}
-    \caption{New code using the pure \acrshort{awset} (pawset).}
-  \end{sublisting} 
-  \caption{Adding a type declaration when creating a Mnesia table. Code excerpt
-  modified from ejabberd~\cite{processone2023ejabberd}.}
-  \label{lst:hypermnesia type decl}
-\end{listing}
+As shown in \cref{lst:mnesia ec activity} in~\cref{sec:design}, the code changes 
+needed from dirty operations to \acrshort{ec} operations is often just one line 
+of change. Another change is the \texttt{type} option while creating
+a Mnesia table, as shown in~\cref{lst:mnesia ec create table} in~\cref{sec:design}. 
+And that is all the change needed to use the new API\@. 
 
 The second step is to apply the refactoring described above in actual production
 codebases such as RabbitMQ~\cite{vmware2023rabbitmq} and 
@@ -615,8 +522,102 @@ effort in changing the source code.
 It is worth noting that this is not a formal usability study of the new API.
 A more rigorous study requires much more extensive testing and understanding
 of the project codebases, which requires lots of engineering effort and is beyond
-the scope of this project. Nevertheless, we believe this evaluation is a first
+the scope of this paper. Nevertheless, we believe this evaluation is a first
 step towards making Hypermnesia more usable and production-ready.
+
+% \begin{listing}[htp]
+%   \begin{sublisting}[t]{0.48\columnwidth}
+%     \begin{minted}[frame=lines]{erlang}
+%       mnesia:activity(async_dirty, 
+%       fun () -> 
+%         mnesia:write(tab, tup),
+%         mnesia:read(tab, key)
+%       end).
+%     \end{minted}
+%     \caption{transactions with \texttt{activity/2}.}
+%   \end{sublisting}
+%   \begin{sublisting}[t]{0.48\columnwidth}
+%     \begin{minted}[frame=lines]{erlang}
+%       mnesia:activity(async_ec, 
+%       fun () -> 
+%         mnesia:write(tab,tup),
+%         mnesia:read(tab,key)
+%       end).
+%     \end{minted}
+%     \caption{dirty with \texttt{activity/2}.}
+%   \end{sublisting}
+  
+%   \begin{sublisting}[t]{\columnwidth}
+%     \begin{minted}[frame=lines]{erlang}
+%       mnesia:activity(async_ec, 
+%       fun () -> 
+%         mnesia:write(tab,tup),
+%         mnesia:read(tab,key)
+%       end).
+%     \end{minted}
+%     \caption{\acrshort{ec} operations with \texttt{activity/2}}
+%   \end{sublisting}
+%   \begin{sublisting}[t]{0.48\columnwidth}
+%     \begin{minted}[frame=lines]{erlang}
+%       mnesia:transaction(
+%       fun () -> 
+%         mnesia:write(tab,tup),
+%         mnesia:read(tab,key)
+%       end).
+%     \end{minted}
+%     \caption{transactions with \texttt{transaction/1}}
+%   \end{sublisting}
+%   \begin{sublisting}[t]{0.48\columnwidth}
+%     \begin{minted}[frame=lines]{erlang}
+%       mnesia:async_dirty(
+%       fun () -> 
+%         mnesia:write(tab,tup),
+%         mnesia:read(tab,key)
+%       end).
+%     \end{minted}
+%   \caption{dirty with \texttt{async\_dirty/1}}
+%   \end{sublisting}
+  
+%   \begin{sublisting}[t]{\columnwidth}
+%       \begin{minted}[frame=lines]{erlang}
+%         mnesia:async_ec(
+%         fun () -> 
+%           mnesia:write(tab,tup),
+%           mnesia:read(tab,key)
+%         end).
+%       \end{minted}
+%     \caption{\acrshort{ec} operations with \texttt{async\_ec/1}}
+%   \end{sublisting}
+%   \caption{Changing from transaction or dirty operations to \acrshort{ec} operations.}
+%   \label{lst:ec api comparison}
+% \end{listing}
+
+
+% \begin{listing}[htp]
+%   \centering 
+%   \begin{sublisting}[t]{\columnwidth}
+%     \centering
+%     \begin{minted}[frame=lines]{erlang}
+%       ejabberd_mnesia:create(?MODULE, oauth_client, [{disc_copies, [node()]},
+%        {attributes, record_info(fields, oauth_client)}, {type, set}]).
+%     \end{minted}
+%     \caption{Original code creating a Mnesia table, using a set data structure.}
+%   \end{sublisting}
+  
+%   \begin{sublisting}[t]{\columnwidth}
+%     \centering
+%     \begin{minted}[frame=lines]{erlang}
+%       ejabberd_mnesia:create(?MODULE, oauth_client, [{disc_copies, [node()]},
+%        {attributes, record_info(fields, oauth_client)}, {type, pawset}]).
+%     \end{minted}
+%     \caption{New code using the pure \acrshort{awset} (pawset).}
+%   \end{sublisting} 
+%   \caption{Adding a type declaration when creating a Mnesia table. Code excerpt
+%   modified from ejabberd~\cite{processone2023ejabberd}.}
+%   \label{lst:hypermnesia type decl}
+% \end{listing}
+
+
 
 
 % \subsection{Summary}
