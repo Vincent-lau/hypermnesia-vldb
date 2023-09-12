@@ -2,7 +2,7 @@
 
 Hypermnesia is designed to be a drop-in replacement for Mnesia, with the goal
 of achieving minimum refactoring of client codebase as well as the Mnesia codebase.
-To achieve this, we consider we aspects of our design: the user-facing 
+To achieve this, we consider two aspects of our design: the user-facing 
 \acrshort{api} design (\cref{subsec:design api}) and the choice of a 
 \acrshort{crdt} which
 has large impact on how we extend Mnesia (\cref{subsec:design choose crdt}).
@@ -138,8 +138,8 @@ have an important drawback in their communication
 overhead~\cite{almeida2018DeltaCRDT}. This might not be acceptable for data types 
 with large state such as sets. \acrshortpl{dcrdt} is a more suitable candidate for our 
 purpose but even with \acrshortpl{dcrdt}, a fair amount
-of data needs to be broadcast, especially as the number of operations increases. 
-Moreover, it might be difficult to 
+of data needs to be broadcast, especially as the number of operations 
+increases~\cite{almeida2018DeltaCRDT}.  Moreover, it might be difficult to 
 examine the state before broadcasting, since Mnesia does not do this by 
 default (\cref{subsec:mnesia access contexts}).
 State-based \acrshortpl{crdt} do have the advantage of low demand 
@@ -163,7 +163,7 @@ of each \acrshort{crdt} without practical benchmarking:
 \acrshortpl{dcrdt} uses periodic synchronisation of delta states, while
 pure op-based \acrshortpl{crdt} go through an extra causal broadcast layer.
 Moreover, \citet{almeida2018DeltaCRDT} and \citet{baquero2017PureOp}
-proposed optimisations for these \acrshortpl{crdt}. One could
+proposed optimisations for these \acrshortpl{crdt} respectively. One could
 also argue that these two \acrshortpl{crdt} are fundamentally the same as they
 are both doing the necessary work for conflict resolution, but at different
 layers of the system.

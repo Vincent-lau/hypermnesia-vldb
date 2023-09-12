@@ -16,8 +16,9 @@
 
 
 Mnesia is an embedded distributed \acrfull{dbms} designed for industrial-grade
-communication systems written in Erlang~\cite{ericssonab2023mnesiaguide}. It is
-influential in its usage across companies and organisations like Cisco,
+communication systems written in 
+Erlang~\cite{ericssonab2023mnesiaguide,mattsson1998mnesia,mattsson1999mnesiainternal}. 
+It is influential in its usage across companies and organisations like Cisco,
 Goldman Sachs and Mastercard~\cite{cesarini2019erlang}.
 It is also used in open source highly scalable message brokers and XMPP services, such as 
 RabbitMQ~\cite{vmware2023rabbitmq}, MongooseIM~\cite{erlangsolutions2023MongooseIM} and 
@@ -117,7 +118,7 @@ This paper makes the following contributions:
   of manually restarting the database.
   \item \textbf{An extension of the test suite for network partitions.}
   These are used to test the correctness of Hypermnesia. It might
-  be useful for testing existing functionalities such as transactions as well.
+  be useful for testing existing transactional \acrshortpl{api} as well.
   \item \textbf{An extension of the existing benchmarking library for dirty operations
   and \acrshort{ec} operations.} These are built on top of the original benchmarks 
   for transactions.

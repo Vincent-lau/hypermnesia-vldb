@@ -17,14 +17,14 @@ introduction to three of them in detail: distributed transactions (provided by
 Mnesia's transaction API), weak consistency (provided by Mnesia's dirty operations)
 and eventual consistency (our aim).
 
-\paragraph{Distributed transactions} is sometimes also called distributed atomic 
+\emph{Distributed transactions} is sometimes also called distributed atomic 
 commits. It is achieved if all nodes commit
 or all nodes abort~\cite{saltzer2009Principles}. This is part of the properties provided by 
 ACID~\cite{haerder1983dbtransaction} and
 is often implemented with the distributed two-phase commit protocol~\cite{bernstein1987concurrency}.
 Mnesia provides such a guarantee via its transaction APIs.
 
-\paragraph{Weak consistency}
+\emph{Weak consistency}
 is defined as follows:  
 ``The system does not guarantee that subsequent accesses will return the updated 
 value, and several conditions need to be met before the value will be 
@@ -33,7 +33,7 @@ It is (deliberately) vaguely defined to incorporate systems whose replicas
 ``might become consistent by chance''~\cite{bermbach2013consistency}. 
 Mnesia's dirty operations fall into this category. 
 
-\paragraph{Eventual consistency} 
+\emph{Eventual consistency} 
 is defined as follows: ``If no new updates are made to the object,
 eventually all accesses will return the last updated value''~\cite{vogels2008ec}. 
 There are often two steps in achieving eventual consistency~\cite{wikipediacontributors2023ec}:
@@ -65,12 +65,10 @@ more detail in~\cref{sec:bg crdt}.
 
 \subsection{Mnesia} \label{sec:bg mnesia}
 
-Mnesia is an embedded \acrshort{dbms} for Erlang/OTP 
+As an embedded \acrshort{dbms} for Erlang/OTP 
 applications~\cite{mattsson1998mnesia,mattsson1999mnesiainternal}.
-It is similar to relational databases where each table stores tuples, but also
-different since it uses Erlang as its query language instead of SQL\@.
-It has dual mode support for accessing data (\cref{subsec:mnesia access contexts}),
-discussed in more detail below.
+Mnesia has different design goals and access \acrshortpl{api} compared to
+traditional SQL databases. We outline these differences below.
 
 \subsection{Design goals} \label{subsec:bg mnesia design goal}
 
@@ -87,7 +85,7 @@ it is tightly coupled to Erlang, giving it two distinct features:
   removing the impedance mismatch between different data formats.
 \end{enumerate*}
 
-These special features make Mnesia only suitable for specific purposes.
+These special features make Mnesia only suitable for specific tasks.
 Mnesia is typically used when there is a need to replicate a 
 relatively small amount of data: compared with standard SQL databases that can
 handle terabytes of data, Mnesia is instead built for (tens of) gigabytes of 
@@ -214,10 +212,10 @@ for killing and restarting ``misbehaving'' processes.
 
 \subsection{Access contexts} \label{subsec:mnesia access contexts}
 
-A central API provided by Mnesia for table manipulation is given called access
+A central API provided by Mnesia for table manipulation is called access
 contexts. An access context allows a user to specify the level of consistency 
-guarantee of their operations on the database: \emph{transactions} and
-\emph{dirty operations}.
+guarantee of their operations on the database: whether they wish to perform
+\emph{transactions} or \emph{dirty operations}.
 
 \textbf{Transactions} in Mnesia provide ACID properties~\cite{ericssonab2023mnesiaguide}.
 While this is attractive, it also incurs large performance overhead 
@@ -241,7 +239,7 @@ to other replicas in the cluster.
 Mnesia does not examine the content in the table during this process. This 
 property is useful in helping us choose a \acrshort{crdt},
 as we will see later that some \acrshortpl{crdt} require examinations of the state
-before broadcasting the message (\cref{subsec:impl choose crdt}).
+before broadcasting the message (\cref{subsec:design choose crdt}).
 On the receiving side, the transaction manager monitors and
 applies the received message accordingly.
 
@@ -388,7 +386,7 @@ A state-based
 the data structure with other parties, and performs the merge operation with a merge
 (sometimes called join) operator to converge towards the \acrfull{lub} of
 two states. The merge operator must be commutative, idempotent and
-associative to guarantee the convergence property (\cref{prop:state crdt convergence}),
+associative to guarantee the convergence property,
 which is key to eventual consistency.
 
 % \begin{proposition}[\cite{shapiro2011CRDT}] \label{prop:state crdt convergence}

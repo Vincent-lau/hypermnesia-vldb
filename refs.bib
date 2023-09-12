@@ -1685,6 +1685,36 @@ year={2002}}
   abstract = {ForgETS is a globally distributed, replicated in-memory, database collocated with business logic. It allows WhatsApp to have globally replicated datasets with optional disk persistence collocated with our business logic, which provides zero latency data access allowing WhatsApp to sustain temporary network and server outages. ForgETS' design is based on Mnesia with additional support for: 1) network blips and subsequent auto reconciliation 2) explicit support for globally replicated datasets which enforces different replication/reconciliation rules across different regions 3) easier schema management allowing to user to add more servers into the cluster by means of configuration files updates More details on website here: http://codesync.global/speaker/mikhai...}
 }
 
+@inproceedings{cooper2010ycsb,
+  title = {Benchmarking Cloud Serving Systems with {{YCSB}}},
+  shorttitle = {Ycsb},
+  booktitle = {Proceedings of the 1st {{ACM}} Symposium on {{Cloud}} Computing},
+  author = {Cooper, Brian F. and Silberstein, Adam and Tam, Erwin and Ramakrishnan, Raghu and Sears, Russell},
+  date = {2010-06-10},
+  pages = {143--154},
+  publisher = {{ACM}},
+  location = {{Indianapolis Indiana USA}},
+  doi = {10.1145/1807128.1807152},
+  url = {https://dl.acm.org/doi/10.1145/1807128.1807152},
+  urldate = {2023-08-02},
+  abstract = {While the use of MapReduce systems (such as Hadoop) for large scale data analysis has been widely recognized and studied, we have recently seen an explosion in the number of systems developed for cloud data serving. These newer systems address “cloud OLTP” applications, though they typically do not support ACID transactions. Examples of systems proposed for cloud serving use include BigTable, PNUTS, Cassandra, HBase, Azure, CouchDB, SimpleDB, Voldemort, and many others. Further, they are being applied to a diverse range of applications that differ considerably from traditional (e.g., TPC-C like) serving workloads. The number of emerging cloud serving systems and the wide range of proposed applications, coupled with a lack of applesto-apples performance comparisons, makes it difficult to understand the tradeoffs between systems and the workloads for which they are suited. We present the Yahoo! Cloud Serving Benchmark (YCSB) framework, with the goal of facilitating performance comparisons of the new generation of cloud data serving systems. We define a core set of benchmarks and report results for four widely used systems: Cassandra, HBase, Yahoo!’s PNUTS, and a simple sharded MySQL implementation. We also hope to foster the development of additional cloud benchmark suites that represent other classes of applications by making our benchmark tool available via open source. In this regard, a key feature of the YCSB framework/tool is that it is extensible—it supports easy definition of new workloads, in addition to making it easy to benchmark new systems.},
+  eventtitle = {{{SOCC}} '10: {{ACM SIGMOD-SIGOPS Workshop}} on {{Cloud Computing}} in Conjunction with {{SIGMOD}} 2010},
+  isbn = {978-1-4503-0036-0},
+  langid = {english},
+  file = {/Users/vincent/Zotero/storage/TUDNHHF2/Cooper et al. - 2010 - Benchmarking cloud serving systems with YCSB.pdf}
+}
+
+
+@online{thetransactionprocessingcouncil2023tpc,
+  title = {{{TPC Benchmark}}},
+  shorttitle = {Tpc},
+  author = {{The Transaction Processing Council}},
+  date = {2023},
+  url = {https://www.tpc.org/information/who/whoweare5.asp},
+  urldate = {2023-09-12},
+  file = {/Users/vincent/Zotero/storage/7DKT9KU2/whoweare5.html}
+} 
+
 @Article{Abril07,
   author        = "Patricia S. Abril and Robert Plant",
   title         = "The patent holder's dilemma: Buy, sell, or troll?",

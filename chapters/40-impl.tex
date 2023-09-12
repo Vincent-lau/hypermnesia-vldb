@@ -12,10 +12,11 @@ module (\cref{subsec:bg mnesia arch,subsec:design api}), responsible
 for calling the underlying pure op-based Set \acrshort{crdt} implementation.
 In Hypermnesia, two op-based Set \acrshortpl{crdt}
 are implemented: add-wins set (\verb|mnesia_pawset|) and remove-wins set (\verb|mnesia_prwset|)
-(\cref{sec:impl pawset}), which are called by \verb|mnesia_ec| based on the appropriate
+(\cref{subsec:impl pawset opt}), which are called by \verb|mnesia_ec| based on the 
+appropriate
 table type (\cref{lst:mnesia ec create table}). 
 \verb|mnesia_ec| also calls the \verb|mnesia_causal| module that handles the causal 
-broadcast (\cref{sec:impl cbcast}). Each of these modules is explained in more
+broadcast (\cref{subsec:impl cbcast}). Each of these modules is explained in more
 detail in the following sections.
 
 
@@ -83,8 +84,8 @@ detail in the following sections.
       \node[right=of node b] (mod) {Modules};
       \node[right=1.4cm of read,mod] (ec) {\texttt{mnesia\_ec} (\cref{subsec:bg mnesia arch,subsec:design api})};
       \node[right=0.3cm of mnesia b,mod,yshift=-0.4cm] (pawset) 
-        {\texttt{mnesia\_pawset} \texttt{mnesia\_prwset} (\cref{sec:impl pawset})};
-      \node[right=1.4 cm of bcast2,mod] (causal) {\texttt{mnesia\_causal} (\cref{sec:impl cbcast})};
+        {\texttt{mnesia\_pawset} \texttt{mnesia\_prwset} (\cref{subsec:impl pawset opt})};
+      \node[right=1.4 cm of bcast2,mod] (causal) {\texttt{mnesia\_causal} (\cref{subsec:impl cbcast})};
     \end{scope}
 
   \end{tikzpicture}
@@ -227,7 +228,7 @@ Both causal redundancy and stability are implemented in Hypermnesia, where redun
 check is done when adding operation to the \acrshort{polog}, while stability check 
 is done periodically.
 
-\subsection{Broadcast and CRDT algorithms} \label{subsec:impl pawset algorithm}
+\subsection{CRDT algorithms} \label{subsec:impl pawset algorithm}
 
 % \Cref{algo:tcsb} shows the broadcast algorithm obtained by putting these optimisations
 % together (\crefrange{subsec:impl cbcast}{subsec:impl pawset opt}). 
@@ -242,7 +243,7 @@ is done periodically.
 % APIs proposed by~\cite{baquero2014PureOp,baquero2017PureOp}, adapted to fit Mnesia's 
 % architecture (\cref{subsec:bg mnesia arch}).
 
-\Cref{algo:pawset} shows the corresponding algorithm for the pure \acrshort{awset},
+\Cref{algo:pawset} shows the algorithm for the pure \acrshort{awset},
 written according to the specification~\cite{baquero2017PureOp,baquero2014PureOp}.
 The original specifications
 are written as a mathematical specification, while we take
@@ -251,7 +252,7 @@ a programming perspective and present them in terms of set operations like
 each time a deletion or insertion happens, and checks
 for redundant elements using the \verb|redundant| 
 function (\crefrange{line:awset red start}{line:awset red end}), based on the 
-idea of causal stability (\cref{lst:aw set causal redundancy}).
+idea of causal stability.
 
 % \begin{algorithm}[htp]
 %   \DontPrintSemicolon
@@ -399,8 +400,8 @@ idea of causal stability (\cref{lst:aw set causal redundancy}).
   \label{algo:pawset}
 \end{algorithm}
 
-Apart from the \acrlong{awset}, a \acrlong{rwset} (\cref{fig:hypermnesia arch}) 
-is also implemented, and the algorithm is mostly similar to that of an \acrlong{awset}.
+Apart from the \acrlong{awset}, a \acrlong{rwset} is also implemented. The details
+are omitted here as the algorithm is mostly similar to that of an \acrlong{awset}.
 
 \subsection{Practical concerns} \label{subsec:impl practical}
 
@@ -420,7 +421,7 @@ in \(\mathcal O(1)\) time, which is useful in speeding
 up the \verb|remove_redundant| function that needs a liner scan of the entire set
 for matching keys (\cref{line:awset remove red} in~\cref{algo:pawset}).
 However, this representation also loses the partial order of the
-\acrshort{polog}, making the stabilisation process (\cref{subsec:impl causal stability}) 
+\acrshort{polog}, making the stabilisation process (\cref{subsec:impl pawset opt}) 
 much more difficult. 
 
 
@@ -428,9 +429,7 @@ much more difficult.
 
 \Cref{algo:pawset} deals with operations of a set in terms of addition, deletion,
 etc. Although the Mnesia documentation claims the data structure to be a set,
-it behaves more like a map, with keys and payload 
-(recall from~\cref{subsec:bg mnesia data repr} we saw that each row in the student 
-table has an id as the key, and other information like name as the payload). 
+it behaves more like a map, with keys and payload. 
 Therefore the Set \acrshort{crdt}
 falls short when there are concurrent additions of the same key but different
 payloads. This can be solved in general with a Map \acrshort{crdt}~\cite{shapiro2011CRDT}, 
@@ -440,7 +439,7 @@ recursively for the payload.
 
 This puts constraints on the data a user can put in a Mnesia table, and
 is considered as breaking too much compatibility of the existing system and therefore
-I take a simpler approach by resolving them based on the Erlang term 
+we take a simpler approach by resolving them based on the Erlang term 
 order~\cite{ericssonab2023refmanual}, an ordering of data types in Erlang.
 This could easily be extended with other resolution strategies as well.
 
@@ -458,7 +457,7 @@ before matching. Other functions like \verb|all_keys/1| are implemented with
 similar ideas.
 
 
-\subsection{Fault tolerance} \label{sec:impl fault tolerance}
+\subsection{Fault tolerance} \label{subsec:impl fault tolerance}
 
 This section continues the discussion from~\cref{subsec:bg cap} on Mnesia's response
 to network partitions and talks about how Hypermnesia addresses them. We continue
@@ -467,14 +466,14 @@ to use the term transient failure and communication failure to distinguish them.
 \subsection{Communication failure} \label{subsec:impl communication failure}
 
 \Cref{tab:mnesia comm failure ops} shows the sequence of
-operations and the corresponding states of each replica, and
-\cref{fig:mnesia comm failure} shows the graphical representation where three
+operations and the corresponding states of each replica. Initially three
 Mnesia nodes are initially connected to each other and each has an element
 \texttt{a} in them. Then a partition occurs between node A and node B, as well as
-node A and node C. During this partition, an addition of 
+node A and node C, indicated by the horizontal line in the table. 
+During this partition, an addition of 
 element \texttt{c} occurs at A while addition of element \texttt{b} happens
-at B and C. When the partition recovers, replicas are now in an inconsistent
-state which will be reported to the developer for manual resolution.
+at B and C. When the partition recovers (shown with another horizontal line), replicas are 
+now in an inconsistent state which will be reported to the developer for manual resolution.
 
 
 \begin{table}[htp]
@@ -608,7 +607,6 @@ state which will be reported to the developer for manual resolution.
 
     \end{tikzpicture}
     \caption{Hypermnesia buffers messages during the partition.}
-    \label{subfig:hypermnesia comm failure b}
   \end{subfigure}
 
   \begin{subfigure}[t]{0.9\columnwidth}
@@ -631,10 +629,10 @@ state which will be reported to the developer for manual resolution.
     \end{tikzpicture} 
     \caption{When the communication failure recovers, buffered messages are delivered
     and conflicts are resolved.}
-    \label{fig:hypermnesia comm failure}
   \end{subfigure}
   \caption{Hypermnesia buffers messages during communication failure and resolves
   conflicts afterwards.}
+  \label{fig:hypermnesia comm failure}
 \end{figure}
 
 
@@ -646,7 +644,7 @@ replicas will converge after the buffered messages are delivered.
 In this simple case, it is sufficient to achieve consistency by a simple set 
 union. In a more complex case
 such as concurrent addition and deletion, the underlying op-based 
-\acrshort{crdt} (\cref{sec:impl pawset}) will handle the conflict resolution 
+\acrshort{crdt} will handle the conflict resolution 
 logic to ensure convergence.
 
 The challenge here is that Mnesia, by default, considers dead nodes not to be 
@@ -664,7 +662,7 @@ When a transient network failure happens, communication between nodes temporaril
 stops but is not long enough for the failure detector to act. Transactions
 will completely stall during this period. Although dirty operations can carry
 on, replicas might end up in different states due to out-of-order message delivery.
-For example, in~\cref{fig:mnesia transient failure}, there might be a
+For example, in~\cref{fig:mnesia transient failure}, suppose there is a
 network failure between node B to A, resulting in B's \texttt{add a} being delayed.
 If messages are delivered as they arrive, then node A and node C will end up in 
 an inconsistent state. This is because addition and deletion in a set 

@@ -2,7 +2,9 @@
 
 In the experimental evaluation, we show that Hypermnesia achieves eventual consistency.
 We also evaluate the performance of Hypermnesia in terms of its throughput and latency,
-compared against the standard Mnesia, as well as PostgreSQL\footnote{} and MongoDB\footnote{}.
+compared against the standard Mnesia, as well as 
+PostgreSQL\footnote{\url{https://www.postgresql.org/}} and 
+MongoDB\footnote{\url{https://www.mongodb.com/}}.
 
 We start by introducing new tests to ensure
 the correctness of the system (\cref{sec:eval correctness}), and then outline
@@ -21,9 +23,9 @@ Hypermnesia (\cref{sec:eval api}).
 The experiments are performed on:
 \begin{enumerate*}[(a)]
   \item a single physical machine with multiple Erlang VMs connected via the loopback 
-  interface, mainly used for correctness testing and some simple experiments;
+  interface, mainly used for correctness testing;
   \item multiple physical machines inside a data centre connected via ethernet
-  switches, used for more extensive benchmarking.
+  switches, used for database benchmarking.
 \end{enumerate*}
 
 The single physical machine has an AMD 12-Core Processor and 16GiB DDR4 memory. 
@@ -33,12 +35,15 @@ They all run the Ubuntu 20.04.4 LTS Operating System.
 
 
 To evaluate Hypermnesia against MongoDB and PostgreSQL, we use Kubernetes to simplify
-the deployment process. For MongoDB, the MongoDB enterprise operator\footnote{} is used
+the deployment process. For MongoDB, the MongoDB enterprise 
+operator\footnote{\url{https://www.mongodb.com/docs/kubernetes-operator/stable/}} is used
 to setup a Replica Set of MongoDB instances. MongoDB's replication is asynchronous,
 similar to the \verb|async_ec| access context of Hypermnesia. PostgreSQL is deployed 
-with the Bitnami's \texttt{postgresql-ha} helm chart, which uses PostgreSQL's builtin
+with the Bitnami's \texttt{postgresql-ha} helm 
+chart\footnote{\url{https://bitnami.com/stack/postgresql-ha/helm}}, which uses 
+PostgreSQL's builtin
 streaming replication for duplicating data. This process is also asynchronous, which
-is desirable for our purposes.
+is desirable for our purposes as it resembles Mnesia's \verb|async_ec| access context.
 
 
 \subsection{Correctness} \label{sec:eval correctness}
@@ -74,8 +79,7 @@ respecting the existing test suite structure. The network partition is simulated
 a custom Erlang distribution protocol~\cite{ericssonab2023erldistro}, 
 developed by RabbitMQ for their integration testing~\cite{rabbitmq2022inet_tcp_proxy}.
 
-Hypermnesia passes all of the tests mentioned above, and the output
-log of the tests is included in~\cref{appendix:test output}.
+Hypermnesia passes all of the tests mentioned above.
 
 \subsection{Benchmarking} \label{sec:eval benchmarks}
 
@@ -125,11 +129,13 @@ Although Mnesia is a specialised embedded database, it is worthwhile trying to u
 how it performs against other mainstream databases. However, due to Mnesia's specialised nature
 and complexity, it is challenging to compare it against other databases with a unified 
 suite. Although there are readily available database benchmark standards and libraries such
-as TPC~\cite{} and YCSB~\cite{}, extending these to support Mnesia either requires lots of
-engineering effort or would defeat the purpose of using an embedded database in the first place,
-because a new benchmark client for Mnesia makes it behave more like a standalone database rather
-than embedded one. Nevertheless, we still use YCSB as our benchmark library for PostgreSQL and
-MongoDB, and the builtin benchmark for Mnesia. To ensure fairness, we adjust the parameters 
+as TPC~\cite{thetransactionprocessingcouncil2023tpc} and YCSB~\cite{cooper2010ycsb}, 
+extending these to support Mnesia either requires lots of
+engineering effort or would defeat the purpose of using an embedded database in 
+the first place, because a new benchmark client for Mnesia makes it behave more 
+like a standalone database rather than embedded one. Nevertheless, we still use 
+YCSB as our benchmark library for PostgreSQL and MongoDB, and the builtin benchmark 
+for Mnesia. To ensure fairness, we adjust the parameters 
 of the benchmark to minimise the discrepancy as much as possible.
 
 
